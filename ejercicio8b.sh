@@ -1,0 +1,1 @@
+cd fma && for file in fma_S01*_es.srt; do mv "$file" "${file/_es/}"; done

@@ -1,0 +1,1 @@
+sort -k6,6 -n weather_cordoba.in | head -n 1 | awk '{print $1, $2, $3}'

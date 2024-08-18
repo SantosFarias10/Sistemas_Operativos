@@ -1,0 +1,1 @@
+awk '{print $1, $2, $7 - $8}' superliga.in | sort -k 2,2 -n -k 3,3 -n
