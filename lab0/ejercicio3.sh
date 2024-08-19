@@ -1,1 +1,1 @@
-wget -O alice.txt https://www.gutenberg.org/files/11/11-0.txt && sed 's/Alice/Santos/g; s/Alicia/Santos/g' alice.txt > Santos_in_wonderland.txt && rm alice.txt
+wget https://raw.githubusercontent.com/dariomalchiodi/superhero-datascience/master/content/data/heroes.csv && cat heroes.csv | tr 'A-Z' 'a-z' | tr -d ' ' | tail -n +2 | cut -d';' -f2 heroes.csv | sed '/^$/d'
