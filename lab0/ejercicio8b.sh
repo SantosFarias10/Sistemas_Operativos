@@ -1,1 +1,1 @@
-cd fma && for file in fma_S01*_es.srt; do mv "$file" "${file/_es/}"; done
+cd The_Witcher && for file in The_Witcher_S01*_es.srt; do mv "$file" "${file/_es/}"; done
