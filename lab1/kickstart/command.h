@@ -10,6 +10,7 @@
 #include <stdbool.h> /* para tener bool */
 
 
+
 /* scommand: comando simple.
  * Ejemplo: ls -l ej1.c > out < in
  * Se presenta como una secuencia de cadenas donde la primera se denomina
