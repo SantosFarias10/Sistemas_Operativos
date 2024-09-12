@@ -37,5 +37,12 @@ void builtin_run(scommand cmd);
  *
  */
 
+void command_cd(scommand cd);
+
+void command_help(scommand help);
+
+void command_exit(scommand _exit);
+
+    
 #endif
 

@@ -44,6 +44,9 @@ test-parsing: command.o parsing.o parser.o
 memtest: $(OBJECTS)
 	make -C tests memtest
 
+testeo: 
+	./execut.sh
+
 .depend: $(SOURCES) obfuscated.c
 	$(CC) $(CPPFLAGS) -MM $^ > $@
 

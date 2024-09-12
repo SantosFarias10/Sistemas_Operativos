@@ -426,7 +426,7 @@ void scommand_memory_test (void) {
     /* Usar todos los accesores */
     scmd = scommand_new ();
     scommand_push_back (scmd, strdup ("comando"));
-    scommand_push_back (scmd, strdup ("un-argumento"));
+    scommand_push_back (scmd, strdup ("un-argumento"));                 //Esta linea nos genera un mem leak
     scommand_push_back (scmd, strdup ("otro-argumento"));
     scommand_set_redir_out (scmd, strdup ("salida"));
     scommand_is_empty (scmd);

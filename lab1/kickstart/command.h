@@ -4,11 +4,11 @@
  * pipe).
  */
 
+
 #ifndef COMMAND_H
 #define COMMAND_H
 
 #include <stdbool.h> /* para tener bool */
-
 
 
 /* scommand: comando simple.
