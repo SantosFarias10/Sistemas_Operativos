@@ -35,14 +35,15 @@ void execute_pipeline(pipeline apipe) {
 
     for (unsigned int i = 0; i < apipeLength; i++) {
 
-        if (i < apipeLength - 1) {
-            int res = pipe(pipefd);
-            if (res < 0) {
+        //creamos un pipe 
+        if (i < apipeLength - 1) {  //verificamos que i es menor a apipeLength-1, para asegurarnos de que no se intente crear mas pipe de los necesarios
+            int res = pipe(pipefd); // crea un pipe y guarda los descriptors en "pipefd", pipefd[0] para lectura y pipe[1] para escritura
+            if (res < 0) {  //pipe devuelve -1 si falla y 0 si tiene exito
                 exit(EXIT_FAILURE);
             }
         }
 
-        int forkResult = fork();                    //Creamos el hijo. Creo que va dentro de un ciclo donde se crean la cantidad de hijos necesarios, no solo uno
+        int forkResult = fork();                    //Creamos el hijo. Creo que va dentro de un ciclo donde se crean la cantidad de hijos necesarios, no solo uno   
 
         if (forkResult < 0) {                       //Si falla fork()
             printf("FAILURE: fork()\n");
@@ -50,46 +51,50 @@ void execute_pipeline(pipeline apipe) {
         }
         
         if (forkResult == 0) {               //El caso del hijo
-            if (i > 0) {
-                dup2(aux[0], STDIN_FILENO);
-                close(aux[0]);
+            //redireccion de entrada
+            if (i > 0) {    //si i < 0 significa que no es el primer comando de la tuberia 
+                dup2(aux[0], STDIN_FILENO); //redirige la entrada estandar (STDIN_FILENO) al extremo del pipe anterior (aux[0])
+                //luego cierra ambos extremos del pipe anterior (aux[0] y aux[1])
+                close(aux[0]);  
                 close(aux[1]);
             }
-
-            if (i < apipeLength - 1) {
-                close(pipefd[0]);
-                dup2(pipefd[1], STDOUT_FILENO);
-                close(pipefd[1]);
+            //redirreccion de salida 
+            if (i < apipeLength - 1) {  // si i<apipeLenght-1 significa que no es el ultimo comando en la tuberia
+                close(pipefd[0]);   // cierra el extrema de la lectura del pipe actual
+                dup2(pipefd[1], STDOUT_FILENO); // redirige la salida estandar (STDOUT_FILENO) al extremo de escritura del pipe actual(pipefd[1])
+                close(pipefd[1]);   //ciera el extremo de escritura del pipe actual
             }
 
-            execute_scommand(pipeline_front(apipe));
-            printf("FAILURE: execute_scommand() returned\n");
+            execute_scommand(pipeline_front(apipe));    //ejecuta el comando actual
+            //si la ejecion falla imprime un mensaje de error y cierra el proceso hijo
+            printf("FAILURE: execute_scommand() returned\n");   
             exit(EXIT_FAILURE);
         } else {                                        //El caso del padre
-            childenPIDS[i] = forkResult;
+            childenPIDS[i] = forkResult;    //guardamos el PID del proceso hijo en el array childrenPIDS
 
             if (i > 0) {                                //Cerramos el pipe previo
                 close(aux[0]);
                 close(aux[1]);
             }
             
-            if (i < apipeLength - 1) {                  //Guardamos el pipe para el siguiente comando
+            if (i < apipeLength - 1) {                  //Guardamos los descriptors dle pipe actual en aux para que puedan ser usados por el siguiente comando en la pipeline
                 aux[0] = pipefd[0];
                 aux[1] = pipefd[1];
             }
             
-            pipeline_pop_front(apipe);
+            pipeline_pop_front(apipe);  //eliminamos el camando actual de la pipeline para que el siguiente comando pueda ser procesado
         }
     }
-
-    if (apipeLength > 1) {          //Cerramos el ultimo pipe
+//Cerramos el ultimo pipe
+    if (apipeLength > 1) {  //verificamos si hay mas de un comando en la pipeline          
+        //cerramos ambos extremos del ultimo pipe
         close(aux[0]);
         close(aux[1]);
     }
     
-    if (pipeline_get_wait(apipe)) {
-        for (unsigned int i = 0; i < apipeLength; i++) {
-            int w = waitpid(childenPIDS[i], NULL, 0);
+    if (pipeline_get_wait(apipe)) { //verificamos si se debe esperar a que el proceso hijo termine
+        for (unsigned int i = 0; i < apipeLength; i++) {    
+            int w = waitpid(childenPIDS[i], NULL, 0);   //llamamos a waitpid para esperar a que cada proceso hijo termine
             
             if (w == -1) {                            //Si falla wait()
                 printf("FAILURE: wait()\n");
@@ -113,6 +118,7 @@ void execute_scommand(scommand cmd) {
 
     unsigned int i = 0;
     while (!scommand_is_empty(cmd)) {                           //Llenamos el arreglo argv con el scommand y sus in/outd
+        //llenamos el array argv con los argumentos del comando
         unsigned int scommandLength = strlen(scommand_front(cmd)) + 1;
         argv[i] = malloc(scommandLength * sizeof(char));
         strcpy(argv[i], scommand_front(cmd));
@@ -121,10 +127,10 @@ void execute_scommand(scommand cmd) {
     }
     argv[i] = NULL;   //El ultimo elemento, NULL
 
-    char *in = scommand_get_redir_in(cmd);
+    char *in = scommand_get_redir_in(cmd);  //obtenemos el archivo de redireccion de entrada
     if (in != NULL) {                               //Si hay una redireccion in
         int resIN = open(in, O_RDONLY, S_IRWXU);    //Abrimos el path en Read-Only y con permisos de user owner
-        if (resIN < 0) {
+        if (resIN < 0) {    //si falla imprimimos mensaje de error
             printf("FAILURE: open()\n");
             exit(EXIT_FAILURE);
         }
@@ -132,10 +138,10 @@ void execute_scommand(scommand cmd) {
         close(resIN);                               //Cerramos el fd original
     }
 
-    char *out = scommand_get_redir_out(cmd);
+    char *out = scommand_get_redir_out(cmd);    //obtenemos el archivo de redireccion de salida
     if (out != NULL) {                              //Si hay una redireccion out
         int resOUT = open(out, O_WRONLY | O_CREAT | O_TRUNC, S_IRWXU);  //Abrimos el path en Write-only, lo creamos si no existe, truncamos si existe
-        if (resOUT < 0) {
+        if (resOUT < 0) {   //si falla imprimimos mensaje de error
             printf("FAILURE: open()\n");
             exit(EXIT_FAILURE);
         }
@@ -144,6 +150,6 @@ void execute_scommand(scommand cmd) {
     }
     
     execvp(argv[0], argv);          //Ejecutamos el comando que esta en argv
-    printf("FAILURE: execvp() returned, (%s)\n", argv[0]);
+    printf("FAILURE: execvp() returned, (%s)\n", argv[0]);  //si falla el execvp imprimimos un mensaje de error
     exit(EXIT_FAILURE);
 }
