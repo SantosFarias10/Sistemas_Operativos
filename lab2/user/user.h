@@ -27,6 +27,7 @@ int sem_open(int sem, int value);
 int sem_up(int sem);
 int sem_down(int sem);
 int sem_close(int sem);
+int sem_search(int value);
 
 // ulib.c
 int stat(const char*, struct stat*);

@@ -2,57 +2,46 @@
 #include "kernel/stat.h"
 #include "user/user.h"
 
-void ping(){
-
-    sem_down(1);
-    printf("ping\n"); // \r para que haga un salto de linea con sangria
-    sem_up(1);
-}
-
-void pong(){
-    sem_down(1);
-    printf("    pong\n");
-    sem_up(1);
-}
-
 int main(int argc, char **argv) {
 
-    if(argc != 2){
+    if(argc != 2) {
         printf("ERROR: el programa debe recibir un argumento\n");
         return 0;
     }
 
-    int length = atoi(argv[1]);  // atoi
-    if (length < 1){
-        printf("ERROR: el argumento debe ser un numero entero mayor a 0\n");
+    int length = atoi(argv[1]);  // atoi transforma un string en un int
+    if(length < 1) {
+        printf("ERROR: el argumento debe ser un numero entero mayor a cero\n");
         return 0;
     }    
-    
-    sem_open(1,1); // abrimos semaforo de nombre 1 con un solo recurso disponible
 
-    int i = 0;
-    
+    int sem_hijo = sem_search(0);
+    int sem_padre = sem_search(1); 
 
     int f = fork();
 
-    if(f == -1){
-        exit(0);
-    }else if(f == 0){ //caso del hijo
-        while(i < length){
-            pong();
-            i++;
+    if(f == -1) {
+        printf("ERROR: fallo el fork\n");
+        return 0;
+    } else if(f == 0) { //caso del hijo
+        for (unsigned int i = 0; i < length; i++) {
+          sem_down(sem_hijo);
+          printf("\tpong\n");
+          sem_up(sem_padre);
         }
-
-    }else{            //caso del padre
-        while(i < length){
-            ping();
-            i++;
+        return 1;
+    } else {            //caso del padre
+        for (unsigned int i = 0; i < length; i++) {
+          sem_down(sem_padre);
+          printf("ping\n");
+          sem_up(sem_hijo);
         }
     }
+    
+    wait(0); //esperamos a que el hijo termine
+    sem_close(sem_hijo);
+    sem_close(sem_padre); 
 
-  
-
-    sem_down(1);
-    sem_up(1);
-    exit(0);
+    return 1;
 }
+

@@ -25,4 +25,5 @@
 #define SYS_sem_up     24
 #define SYS_sem_down   25
 #define SYS_sem_close  26
-//#define SYS_sem_init   27
+#define SYS_sem_search 27
+

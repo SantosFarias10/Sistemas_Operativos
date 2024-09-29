@@ -41,3 +41,5 @@ entry("sem_open");
 entry("sem_up");
 entry("sem_down");
 entry("sem_close");
+entry("sem_search");
+

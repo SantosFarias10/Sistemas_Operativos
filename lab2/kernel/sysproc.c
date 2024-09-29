@@ -120,8 +120,10 @@ uint64 sys_sem_close(void) {
   argint(0, &sem);
   return (uint64)sem_close(sem);
 }
-/*
-uint64 sys_sem_init(void) {
-  return (uint64)sem_init();
+
+uint64 sys_sem_search(void) {
+  int value;
+  argint(0, &value);
+  return (uint64)sem_search(value);
 }
-*/
+
