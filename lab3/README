@@ -1,0 +1,47 @@
+# Lab 3: Planificador de procesos
+Este proyecto se basa en xv6, un sistema operativo de enseñanza simple similar a Unix desarrollado por el MIT con fines educativos. En este proyecto, hemos investigado todo lo relacionado la **planificación** de los procesos.
+
+## Contenido
+
+- [Consignas](https://docs.google.com/document/d/1C_5iZmFkeDRUfSxVB7gFeBoTY_vN7Ff91TeO2G89RdQ/edit?tab=t.0#heading=h.kfn2z5rec3ur)
+- [Informe](INFORME.md)
+
+**Completar**
+
+### Requisitos Previos
+
+Para construir y ejecutar xv6, necesitas tener las siguientes herramientas instaladas en tu sistema:
+- `gcc` (ColecciÃ³n de Compiladores de GNU)
+- `qemu` (Emulador RÃ¡pido)
+- `make`
+- `git` (Sistema de control de versiones)
+
+### Clonando el Repositorio
+
+Clonar el repositorio con git:
+```sh
+git clone https://user@bitbucket.org/sistop-famaf/so23lab3g36.git
+```
+### Emulador QEMU
+
+Posicionandote en el directorio so23lab3g36/xv6, ejecutar el comando `make QEMU`.
+
+## Comandos Útiles
+
+- `ls`: Una vez en el emulador QEMU, al ejecutar ls lista todos los programas de usuario disponibles.
+- `<CTRL-p>`: Lista todos los procesos que están corriendo en el sistema xv6.
+- `<CTRL-a> x`: Sale del sistema operativo xv6.
+- `make QEMU`: Ejecuta el emulador QEMU de xv6.
+
+## Bibliografia
+
+- `xv6: a simple, Unix-like teaching operating system`.
+- `Operating Systems: Three Easy Pieces`.
+
+## Contribuciones
+
+Participaron los estudiantes de la materia Sistemas Operativos, del grupo 36:
+- `Santino Ponchiardi`
+- `Santos Facundo Adrian Farias`
+- `Brandon Michel`
+- `Alejandro N. Pitt Aparicio`
