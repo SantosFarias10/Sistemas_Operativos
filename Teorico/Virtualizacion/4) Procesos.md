@@ -8,7 +8,7 @@ El SO crea esta ilusión **Virtualizando** la CPU. Esto lo logra ejecutando un p
 
 La contrapartida del tiempo compartido es el **Espacio compartido**, donde un recurso se divide (en el espacio) entre aquellos que deseen utilizarlo.
 
-Para implementra la virtualizacion de la CPU, y para implementarla bien, el SO necesitará tanto maquinaria de bajo nivel como inteligencia de alto nivel. La maquinaria de bajo nivel la llamamos **Mecanismos**; son métodos o protocolos de bajo nivel que implementan una parte de la funcionalidad necesaria. Por ejemplo: **Cambio de contexto**, que le da al SO la capacidad de dejar de ejecutar un programa y empezar a ejecutar otro en una CPU determinada.
+Para implementar la virtualizacion de la CPU, y para implementarla bien, el SO necesitará tanto maquinaria de bajo nivel como inteligencia de alto nivel. La maquinaria de bajo nivel la llamamos **Mecanismos**; son métodos o protocolos de bajo nivel que implementan una parte de la funcionalidad necesaria. Por ejemplo: **Cambio de contexto**, que le da al SO la capacidad de dejar de ejecutar un programa y empezar a ejecutar otro en una CPU determinada.
 
 Encima de estos mecanismos reside parte de la inteligencia del SO, en forma de **Politicas**. Son algoritmos para tomar algún tipo de decisión dentro del SO. Por ejemplo: dado un número de programas posibles para ejecutar en una CPU, ¿Qué programa debería ejecutar el SO? Una **Política de Planificación** en el SO tomará esta decisión.
 
@@ -22,7 +22,7 @@ Para entender lo que constituye un proceso, tenemos que entender su **Estado**: 
 
 Un componente obvio del estado que comprende un proceso es su *memoria*. Las instrucciones se encuentran en la memoria; los datos que el programa en ejecución lee y escribe también se encuentran en la memoria. La memoria a la que el proceso puede direccionar (llamada su **Espacio de Direcciones**) es parte del proceso.
 
-también forman parte del estado del proceso los *registros*; muchas instrucciones leen o actualizan explícitamente los registros y es evidente que son importantes para la ejecución del proceso.
+También forman parte del estado del proceso los *registros*; muchas instrucciones leen o actualizan explícitamente los registros y es evidente que son importantes para la ejecución del proceso.
 
 Hay algunos registros particularmente especiales que no forman parte de este estado. Por ejemplo: el **Contador de programa** (PC) (a veces llamado **puntero de instrucción** o **IP**) nos dice qué instrucción del programa se ejecutará a continuación.
 
@@ -56,7 +56,7 @@ Figure 4.1: **Cargando: De un programa a proceso**
 
 Antes los sistemas operativos, el proceso de carga se realizava de forma **anticipada**, todo de una vez antes de ejecutar el programa; los SO modernos realizan el proceso de forma **perezosa**, cargando partes del código o de los datos sólo cuando se necesitan durante la ejecución del programa.
 
-Una vez que el cídigo y los datos estáticos se cargan en la memoria, hay algunas otras cosas que el SO necesita hacer antes de ejecutar el proceso. Se debe asignar algo de memoria para el **Stack de ejecución del programa** (o simplemente stack). Los programas de C utilizan el stack para las variables locales, los parámetros de las funciones y las direcciones de retorno; el SO asgina esta memoria y se la da al proceso. El SO también inicializará el stack con argumentos; llenará los parámetros de la función `main()`, osea, `argc` y la matriz `argv`.
+Una vez que el código y los datos estáticos se cargan en la memoria, hay algunas otras cosas que el SO necesita hacer antes de ejecutar el proceso. Se debe asignar algo de memoria para el **Stack de ejecución del programa** (o simplemente stack). Los programas de C utilizan el stack para las variables locales, los parámetros de las funciones y las direcciones de retorno; el SO asgina esta memoria y se la da al proceso. El SO también inicializará el stack con argumentos; llenará los parámetros de la función `main()`, osea, `argc` y la matriz `argv`.
 
 El SO también puede asignar algo de memoria para el **heap** del programa. En C, el heap se utiliza para los datos que se pidieron explícitamente y fueron asignados dinámicamente; los programas solicitan dicho espacio llamando a `malloc()` y lo liberan explícitamente llamando a `free()`.
 
