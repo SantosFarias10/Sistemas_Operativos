@@ -234,7 +234,7 @@ Ademas de `fork()`, `exec()` y `wait()`, en los sistemas UNIX existen otras form
 
 El subsistema completo de señales proporciona una insfractutura para enviar eventos externos a los procesos, incluyendo formas de recibir y procesar esas señales en procesos individuales, y formas para enviar señales tanto a proceso individuales como a procesos grupales. Para usar esta forma de comunicación, un proceso debe usar la sytem call `signal()` para "agarrar" varias señales; haciendolo se asegura que cuando una señal particular es entregada a un proceso, este suspendera su ejecución normal y ejecutara una parte particular de código en respuestas de la señal.
 
-##### ¿Quien puede enviar una señal a un proceso, y quien no?
+#### ¿Quien puede enviar una señal a un proceso, y quien no?
 
 Los sistemas que usamos pueden tener multiples personas usandolos al mismo tiempo; si una de esas personas puede arbitrariamente enviar señales como *SIGINT* para interrumpir el proceso, la usabilidad y seguridad del sistema estaria comprometida. Como resultado, los sistemas modernos incluyen una fuerte concepción de la noción de **Usuario**. El usuario, despues de ingresar una contraseña para establecer credenciales, inicia sesión para ganar accesos a los recursos del sistema. Entonces el usuario puede ejecutar uno o muchos procesos, y ejerce control total sobre ellos (pausarlo, matarlos, etc). Los usuarios generalmente solo pueden controla sus propios procesos; el trabajo del SO es repartir recursos a cada usuario para cumplir con los objetivos generales del sistema.
 
