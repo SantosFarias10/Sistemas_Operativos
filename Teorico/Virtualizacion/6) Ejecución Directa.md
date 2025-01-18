@@ -32,7 +32,7 @@ En contraste al modo usuario está el **Modo Kernel**, en el que el SO (o kernel
 
 Para ejecutar una llamada al sistema, un programa debe ejecutar una instrucción **Trap** especial. Esta instrucción simultáneamente salta al kernel y eleva el nivel de privilegios; una vez en el kernel, el sistema ahora puede realizar cualquier operación privilegiada que sea necesaria (si está permitida). Cuando finaliza, el SO llama a una instrucción especial de **Retorno de la Trap** que devuelve al programa de usuario que realiza la llamada y reduce el nivel de privilegios al de modo usuario.
 
-**¿Cómo sabe la trap qué código ejecutar dentro del SO?** El proceso que realiza la llamda no puede especificar una dirección a la que saltar; hacerlo permitiría a los programas saltar a cualquier parte del kernel, lo que claramente es muy mala idea. Por lo que el kernel debe controlar cuidadosamente que código se ejecuta en una instrucción trap.
+**¿Cómo sabe la trap qué código ejecutar dentro del SO?** El proceso que realiza la llamada no puede especificar una dirección a la que saltar; hacerlo permitiría a los programas saltar a cualquier parte del kernel, lo que claramente es muy mala idea. Por lo que el kernel debe controlar cuidadosamente que código se ejecuta en una instrucción trap.
 
 El kernel lo hace configurando una **Tabla de traps** en el momento de booteo. Cuando la maquina arranca, lo hace en modo privilegiado (kernel) y es libre de configurar el hardware de la maquina según sea necesario. Una de las primeras cosas que hace el SO es decirle al hardware que código debe ejecutar cuando ocurren ciertos eventos excepcionales.
 
