@@ -102,3 +102,68 @@ El resultado es un tiempo medio de entrega mucho mejor: 50 segundos ($\frac{(120
 
 ## Una Nueva Métrica: El Tiempo de Respuesta
 
+STCF sería una excelente política de planificación si supieramos la duración de cada trabajo, y si los trabajos usaran solamente la CPU, y además nuestra única métrica fuera el tiempo de entrega. 
+
+Definimos el tiempo de respuesta como el tiempo desde que el trabajo llega a un sistema hasta la primera vez que es elegido para ser ejecutado.
+
+$$T_{respuesta} = T_{1ra-ejecución} - T_{llegada}$$
+
+Si tuvieramos el programa de la figura 7.5 (con A llegando en el tiempo 0, y B y C en el tiempo 10), el tiempo de respuesta de cada trabajo sería: 0 para el trabajo A, 0 para B y 10 para C (media: 3,33).
+
+STCF y las disciplinas relacionads no son particularmente buenas con el tiempo de respuesta. Si tres trabajos llegan al mismo tiempo, por ejemplo, el tercer trabajo tiene que esperar a que los dos trabajos anteriores se ejecuten en su totalidad antes de ser elegidos por primera vez. Si bine es excelente para el tiempo de entrega, este acercamiento es bastante malo para el tiempo de respuesta y para la interactividad.
+
+---
+
+## Round Robin
+
+¿Cómo podemos construir un planificador que sea sencible al tiempo de respuesta? Para resolver este problema, prensetamos un nuevo algoritmo de planificación, denominado como planificación **Round Robin** (**RR**). La idea básica es simple: en lugar de ejecutar trabajos hasta su finalización, RR ejecuta cada trabajo durante un **segmento de tiempo** (**Quantum de planificación**) y luego cambia al siguiente trabajo en la cola de ejecución. RR se denomina a veces como **División de tiempo**. Notar que la duración de un segmento de tiempo debe ser un múltiplo del período de interrupción del temporizador; si el temporizador se interrumpe cada 10 ms, el segmento de tiempo podría ser de 10, 20 o cualquier múltiplo de 10ms.
+
+Ejemplo: Supongamos que tres trabajos, A, B y C llegan al mismo tiempo al sistema y que cada trabajo desea ejecutarse durante 5 segundos. SJF ejecuta cada trabajo hasta su finalización antes de ejecutar otro.
+
+![Figure 7.6](../imagenes/figure7_6.png)
+
+Figure 7.6: **SJF de Nuevo (malo para el tiempo de respuesta)**
+
+Por lo contrario, RR con un segmento de tiempo de 1 segundo recorrería los trabajos rapidamente
+
+![Figure 7.7](../imagenes/figure7_7.png)
+
+Figure 7.7: **Round Robin (bueno para el tiempo de respuesta)**
+
+El tiempo promedio de respuesta de RR es de $\frac{0+1+2}{3} = 1$; para el SJF, el tiempo medio de respuesta es de $\frac{0+5+10}{3} = 5$.
+
+La duración del segmento de tiempo es fundamental en RR. Cuanto más corto sea, mejor será el rendimiento de RR según la métrica del tiempo de respuesta. Si el segmento de tiempo es demasiado corto puede resultar problemático: el costo de cambio de contexto dominaría el rendimiento general.
+
+El costo del cambio de contexto no surge únicamente de las acciones del SO de guardar y restaurar registros. Cuando los programas se ejecutan, acumulan una gran cantidad de estado en cachés de CPT, TLB, predictores de salto y otro hardware en chip. Cambiar a otro trabajo hace que este estado se vacíe y se introduzca un nuevo estado relevante para el trabajo que se esté ejecutando en el momento.
+
+RR, con un segmento de tiempo razonable es un planificador excelente si el tiempo de respuesta es nuestra única métrica. ¿Qué pasa con el tiempo de entrega? Veamos con nuestro ejemplo anterior. A, B y C, cada uno con tiempo de ejecución de 5 segundos, llegan al mismo tiempo, y el planificador es de tipo RR con un (largo) segmento de tiempo de 1 segundo. Vemos en la Figure 7.7 que A termina en 13, B en 14 y C en 15, para una media de 14 (horrible xd).
+
+RR es una de las peores políticas si nuestra métrica es el tiempo de entrega. Lo que hace RR es estirar cada trabajo tanto como pueda, ejecutando cada trabajo por muy poco tiempo antes de pasar al siguiente.
+
+Cualquier política que sea **Justa** (como RR), que divida uniformemente la CPU entre los procesos activos en una escala de tiempo pequeña, tendrá un desempeño deficiente en métrica como el tiempo de entrega.
+
+---
+
+## Incorporando I/O
+
+Primero olvidemos el supuesto 4 [Todos los trabajos usan solo la CPU (o sea, no realizan I/O)]: Todos lo programas realizan I/O.
+
+Claramente el planificador tiene que tomar una decisión cuando algún trabajo inicia una solicitud de I/O, pues el trabajo que se está ejecutando deja de usar la CPU durante la I/O, y se queda **Bloqueado** esperando su finalización. Si la I/O se envía a una unidad de disco dura, es posible que el proceso se bloquee durante unos milisegundos o más, dependiendo de la carga de I/O de la unidad en ese momento. Quizás sea mejor que el planificador aproveche este tiempo para ejecutar otro trabajo en la CPU.
+
+El planificador también debe tomar una decisión cuando se termina la I/O, moviendo esto ocurre, se genera una interrupción y se ejecuta el SO, moviendo el proceso que emitió la I/O del estado bloqueado al estado listo. Podría incluso decidir seguir ejecutando el mismo trabajo en ese momento.
+
+Supongamos que tenemos dos trabajos, A y B, que necesitan cada uno 50 ms de tiempo de CPU.
+
+![Figure 7.8](../imagenes/figure7_8.png)
+
+Hay una diferencia obvia: A se ejecuta durante 10ms y luego emite una solicitud de I/O (supongamos que las I/O tardan 10 ms cada una), mientras que B simplemente usa la CPU durante 50 ms y no realiza ninguna I/O. El planificador ejecuta primero A, y después a B.
+
+Un enfoque común es tratar ccada subtrabajo de 10 ms de A como un trabajo independiente. Cuando el sistema se inicia, su elección está entre ejecutar un A de 10 ms o un B de 50 ms. Con STCF, la elección es clara: elegir el mas corto. Después, cuando el primer subtrabajo de A se haya completado, solo queda B y comienza su ejecución. Luego se envía un nuevo subtrabajo de A, que se adelante a B y se ejecuta durante 10 ms. De esta manera se permite la **Superposición**, con la CPU siendo utilizada por un proceso mientras espera que se complete la I/O de otro proceso.
+
+![Figure 7.9](../imagenes/figure7_9.png)
+
+---
+
+## No Más Oráculo
+
+Llegamos a la última suposición: que el planificador conoce la duración de cada trabajo. Esta es la peor suposición. En un SO de propósito general, el SO generalmente sabe muy poco sobre la duración de cada trabajo.
