@@ -76,3 +76,72 @@ Un trabajo interactivo B (mostrado en gris) que necesita la CPU solo durante 1 m
 
 ### Problemas con nuestra MLFQ actual
 
+Tenemos una MLFQ básica. Parece hacer un buen trabajo, compartiendo la CPU justamente entre trabajos de larga duración y dejando los trabajos interactivos cortos o intesivos de I/O se ejecuten rápidamente. El enfoque que tenemos hasta ahora tiene graves defectos.
+
+1. Tenemos el problema de la inanición: si hay "demasiados" trabajos interactivos en el sistema, se combinarán para consumir todo el tiempo de CPU, y por lo tanto los trabajos de larga duración nunca recibirán ningún tiempo de CPU (**mueren de hambre**).
+
+2. Un usuario podría reescribir su programa para **engañar al planificador**. Engañar al planificador se refiere a la idea de hacer algo astuto para manipular al planificador a darte más de tu parte justa del recurso. El algoritmos que hemos descripto es susceptible al siguiente ataque: antes de que termine el segmento de tiempo, emití una operación de I/O (a algún archivo que no te importe), renunciando de esta forma a la CPU; hacer esto te permite permanecer en la misma cola y ganar un mayot porcentaje de tiempo de CPU. Si se hace bien (por ejemplo, ejecutando el 99% de un segmento de tiempo antes de ceder la CPU), un trabajo podría casi monopolizar la CPU.
+
+3. Un programa puede cambiar su comportamiento con el tiempo; lo que antes era CPU-bound puede pasar a una fase de interactividad. Con nuestro enfoque, tal trabajo no tendría suerte y no sería tratado como los otros trabajos interactivos en el sistema.
+
+---
+
+## Segundo intento: El ascenso de prioridad
+
+Tratemos de cambiar las reglas para poder evitar el problema de inanición.
+
+La idea simple sería **elevar** periódicamente la prioridad de todos los trabajos en el sistema. Hay muchas maneras de lograr esto, pero hagamos algo simple: tirarlos a todos en la cola superior.
+
+* **Regla 5**: Después de un período de tiempo determinado S, mover todos los trabajos del sistema a la cola más alta.
+
+Esta regla resuelve dos problemas a la vez.
+
+1. Garantiza que los procesos no mueran de hambre: al quedarse en la cola superior, un trabajo compartirá la CPU con otros trabajos de alta prioridad al estilo RR y así, con el tiempo, recibirá servicio.
+
+2. Si un trabajo CPU-bound se vuelve interactivo, el planificador lo tratará correctamente una vez que haya recibido el ascenso de prioridad.
+
+Ejemplo. En este escenario, solo mostramos el comportamiento de un trabajo de ejecución larga cuando competimos por la CPU con dos trabajos interactivos de ejecución corta.
+
+![Figure 8.5](../imagenes/figure8_5.png)
+
+Figure 8.5: **Sin (izquierda) y con (derecha) ascenso de prioridad**
+
+En la izquierda, no hay un ascenso de prioridad, por lo que el trabajo de larga duración se muere de hambre una vez que llegan dos trabajos cortos; en la derecha, hay un ascenso de prioridad cada 50 ms (que probablemente sea un valor demasiado pequeño, pero se utiliza solamente para el ejemplo xd) y al menos  garantizamos que el trabajo de larga duración progresará, oteniendo un ascenso a la máxima prioridad cada 50 ms y así llegar a ejecutarse periódicamente.
+
+La adición del período de tiempo S conduce a la pregunta: ¿A qué valor se debe establacer S? Si se le asigna un valor demasiado alto, los trabajos de larga duración podrían morir de hambre; demasiado bajo, y es posible que los trabajos interactivos no obtengan una parte adecuada de la CPU.
+
+---
+
+## Tercer intento: Mejor contabilidad
+
+Tenemos un problema más que resolver: ¿Cómo evitar los engaños a nuestro planificador? Las verdaderas culpables son las reglas 4a y 4b, que permiten que un trabajo conserve su prioridad al renunciar a la CPU antes de que expire el segmento de tiempo.
+
+La solución es realizar una mejor **contabilidad** del tiempo de la CPU en cada nivel de la MLFQ. En lugar de olvidarse de la porción del segmento tiempo que un proceso usa en un nivel dado, el planificador debería realizar un seguimiento; una vez que un proceso haya utilizado todo su tiempo asignado, es degradado a la siguiente cola de prioridad. No importa si utiliza el segmento de tiempo en una ráfaga larga o en muchas pequeñas. Reescribimos las reglas 4a y 4b a la siguiente y única regla:
+
+* **Regla 4**: Una vez que un trabajo utilice su tiempo asignado en un nivel dado (independientemente de cuántas veces haya renunciado a la CPU), su prioridad se reduce (osea, se mueve una cola hacia abajo).
+
+![Figure 8.6](../imagenes/figure8_6.png)
+
+Figure 8.6: **Sin (izquierda) y con (derecha) Protección Contra Engaños**
+
+En la figure se muestra lo que sucede cuando una carga de trabajo intenta engañar al planificador con las antiguas reglas 4a y 4b (a la izquierda), así como la nueva regla 4 anti-engaños. Sin ninguna Protección contra los engaños, un proceso puede emitir una I/O justo antes de que finalice un segmento de tiempo y así dominar el tiempo de la CPU. Con las respectivas protecciones en su lugar, independientemente del comportamiento de I/O del proceso, se desplaza lentamente por las colas y no puede ganar una parte injusta de la CPU.
+
+---
+
+## Ajustando la MLFQ y otros problemas
+
+Hay algunos problemas que surgen con la planificación con MLFQ. Una gran pregunta es como **Parametrizar**. Por ejemplo: ¿Cuántas colas debería haber?¿Qué tan grande debe ser el segmento de tiempo por cola?¿Con qué frecuencia se debe elevar la prioridad para evitar la inanición y tener en cuenta los cambios de comportamiento? No hay respuesta faciles xd y solo un poco de experiencia con las cargas de trabajo y el ajuste posterior del planificador conducirán a un equilibrio satisfactorio.
+
+---
+
+## Resumen de como quedaron las reglas de MLFQ
+
+* **Regla 1**: Si Prioridad(A) > Prioridad(B), se ejecuta A (B no).
+
+* **Regla 2**: Si Prioridad(A) = Prioridad(B), se ejecuta A y B en RR.
+
+* **Regla 3**: Cuando un trabajo ingresa al sistema, se coloca en la prioridad más alta (la cola de más arriba).
+
+* **Regla 4**: Una vez que un trabajo utilice su tiempo asignado en un nivel dado (independientemente de cuántas veces haya renunciado a la CPU), su prioridad se reduce (osea, se mueve una cola hacia abajo).
+
+* **Regla 5**: Después de un período de tiempo determinado S, mover todos los trabajos del sistema a la cola más alta.
