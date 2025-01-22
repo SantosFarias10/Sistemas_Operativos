@@ -1,3 +1,13 @@
+# Parte I &rarr; Virtualizacion
+
+Capitulos:
+
+* [(4) Procesos](4\)%20Procesos.md)
+* [(5) API de un proceso](5\)%20API%20de%20un%20proceso.md)
+* [(6) Ejecución Directa](6\)%20Ejecución%20Directa.md)
+* [(7) Planificación de la CPU](7\)%20Planificación%20de%20la%20CPU.md)
+* [(8) Planificación: Multinivel](8\)%20Planificacion:%20Multinivel.md) &larr; Usted esta aqui
+
 # Planificación: La Cola Multinivel Retroalimentada
 
 **Cola Multinivel Retroalimentada** (**MLFQ**, Multi-Level Feedback Queue).
