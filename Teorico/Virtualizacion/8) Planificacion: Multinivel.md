@@ -42,7 +42,7 @@ Debemos decidir cómo MLFQ va a cambiar el nivel de prioridad de un trabajo (y e
 
 * **Regla 4b**: Si un trabajo cede la CPU antes de que finalice el segmento de tiempo, permanece en el *mismo* nivel de prioridad.
 
-##### Ejemplo 1: Un solo trabajo de larga duración
+### Ejemplo 1: Un solo trabajo de larga duración
 
 Primero, veremos qué sucede cuando ha habido un trabajo de larga duración en el sistema.
 
@@ -52,7 +52,7 @@ Figure 8.2: **Trabajo de larga duración a lo largo del tiempo**
 
 El trabajo ingresa con la prioridad más alta (Q2). Después de un solo segmento de tiempo de 10 ms, el planificador recude la prioridad del trabajo en uno, el trabajo está en Q1. Después de ejecutarse en Q1 durante un segmento de tiempo, el trabajo finalmente se rebaja a la prioridad más baja del sistema (Q0), donde permanece.
 
-##### Ejemplo 2: Y entonces vino un trabajo corto
+### Ejemplo 2: Y entonces vino un trabajo corto
 
 Hay dos trabajos: A, que es un trabajo intensivo de CPU de ejecución prolongada, y B, que es un trabajo interactivo de ejecución corta. Supongamos que A viene funcionando durante un tiempo y entonces llega B.
 
@@ -64,7 +64,7 @@ A (mostrado en negro) está corriendo en la cola de menor prioridad (al igual qu
 
 Debido a que no sabe si un trabajo será un trabajo corto o un trabajo de larga duración, primero asume que podría ser u trabajo corto, dando así al trabajo una prioridad alta. Si en realidad es un trabajo corto, se ejecutará rápidamente y se completará; si no es un trabajo corto, se desplazará lentamente por las colas y pŕonto demostrará ser un proceso de larga duración más del tipo por lotes. De esta manera, MLFQ se aproxima a SJF.
 
-##### Ejemplo 3: ¿Qué pasa con la I/O?
+### Ejemplo 3: ¿Qué pasa con la I/O?
 
 Según lo establecido por la regla 4b, si un proceso abandona el procesador antes de usar su segmento de tiempo, lo mantenemos en el mismo nivel de prioridad. La intención de esta regla: si un trabajo interactivo, por ejemplo, está haciendo una gran cantidad de I/O, abandonará la CPU antes de que se complete su segmento de tiempo; en tal caso, no queremos penalizar el trabajo y simplemente lo mantenemos en el mismo nivel.
 
@@ -74,5 +74,5 @@ Figure 8.4: **Una carga de trabajo mixta con uso intesivo de I/O y de CPU**
 
 Un trabajo interactivo B (mostrado en gris) que necesita la CPU solo durante 1 ms entes de realizar una I/O que compite por la CPU con un trabajo por lotes de larga duración A (mostrado en negro). El enfoque de MLFQ mantiene a B en la prioridad más alta pues B sigue liberando la CPU; si B es un trabajo interactivo, MLFQ logram aún más su objetivo de ejecutar trabajos interactivos rápidamente.
 
-##### Problemas con nuestra MLFQ actual
+### Problemas con nuestra MLFQ actual
 
