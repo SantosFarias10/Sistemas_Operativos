@@ -46,3 +46,21 @@ En el Ejemplo, tenemos un espacio de direcciones chico (solo 16KB). El código d
 
 Después, tenemos dos regiones de espacio de direcciones que podrian crecer (y encogerse) mientras el programa se ejecuta. Estas estan en el heap (arriba) y en el stack (abajo). Se ubican de esta forma porque cada cual debe ser capaz de agrandarse, y poniendolas en los extremos opuestos del espacio de memoria, podemos permitir el crecimiento: solo tiene que expandirse en direcciones opuestas. El heap empieza justo después del código (en el 1KB) y crece hacia abajo (digamos cuando un usuario hace una llamada a un procedimiento). Pero, esta forma de ubicar el heap y el stack es solo una convención.
 
+Cuando describimos el espacio de direccionamiento, lo que estamos describiendo es la **Abstracción** que el SO proporsiona a los programas en ejecución. Realmente el programa no esta en la memoria en las direcciones físicas de 0 hasta 16KB; mas bien es cargada en alguna direcciones físicas arbitrarias. Examinando los procesos A, B y C podemos ver como cada proceso es cargado en la memoria en diferentes direcciones. Y aqui yace el problema: ¿Cómo puede el SO construir de un espacio de direcciones provadas y potencialmente largo multiples programas en ejecución (todos compartiendo memoria) en la cima de una sola memoria física?.
+
+Cuando el SO hace esto, decimos que el SO esta **Virtualizando la memoria**, porque el programa en ejecución cree que esta cargado en la memoria en una dirección particular (digamos 0) y que tiene un espacio de direcciones potencialmente grande (digamos 32 o 64 bits).
+
+Ejemplo, cuando un proceso A intenta realizar una carga en la dirección 0 (la cual llamaremos **Dirección Virtual**), de alguna forma el SO, con ayuda de soporte del hardware, tendra que asegurarse de que la carga no baya realmente a la dirección física 0 sino mas bien a la dirección 320KB (donde A esta cargado en la memoria [Figure 13.2]). Esta es la clave para la virtualización de la memoria, la cual subyace en cada sistema de computación moderna.
+
+---
+
+## Objetivos
+
+El SO no solo virtualizara la memoria, ademas; lo hara con estilo. Para asegurarnos, necesitamos algunos objetivos para guiarnos. Hemos visto estos objetivos antes, y lo veremos de nuevo xd.
+
+* Uno de los mayores objetivos de un sistema de memoria virtual (**VM**) es la **Transparencia**. El SO debe implementar la VM de una forma que sea invisible para los programas en ejecución. El programa no podra ser conciente de que la memoria esta virtualizada; mas bien, el programa se comporta como si fuera su propia memoria física privada. Pero detras de escena, el SO (y el hardware) hace todo el trabajo para multiplicar la memoria entre diferentes trabajos, y aqui se implementa la ilusion.
+
+* Otro objetivo de la VM es la **eficiencia**. El SO debera luchar en hacer la virtualización lo mas eficiente posible, ambos en terminos de tiempo (osea, no hacer que los programas se ejecuten mucho mas lento) y espacio (osea, no usar demasiada memoria para estructuras necesarias para soportar la virtualización). En la implementación de la virtualización eficientemente con respecto al tiempo, el SO tendra que confiar en la ayuda del hardware, incluyendo las caracteristicas del hardware como el TLBs.
+
+* Un tercer objetivo de la VM es la **protección**. El SO debera asegurarse de **proteger** de otros procesos asi como tambien al mismo SO de otros proceso. Cuando un proceso hace una carga, un guardado, o una instrucción de busqueda, no deberia afectar de ninguna forma al contenido de la memoria de otro proceso o del mismo SO. La protección nos permite dar la propiedad de **aislamiento** entre procesos; cada proceso debe ejecutarse en su propio capullo aislado, seguro de procesos defectuosos o incluso maliciosos.
+
