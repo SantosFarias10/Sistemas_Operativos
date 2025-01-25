@@ -50,3 +50,5 @@ Un mecanismo adicional encontrado en muchos asignadores es conocido como **fusio
 
 Dado este (diminuto) heap, ¿Qué sucede cuando una aplicación llama a `free(10)` y retorna el espacio en el medio del heap? Si simplemente lo sumamos al espacio libre de nuevo a nuestra lista sin pensar mucho, terminamos con una lista asi:
 
+![Example](../imagenes/example3.png)
+
