@@ -100,9 +100,9 @@ Notar que los registros base y limite son estructuras del hardware que estan ubi
 
 Una pequeña cosa sobre los registros limites. Los cuales pueden ser definidos de una de dos formas.
 
-* Una forma (como la de arriba), mantiene el *tamaño* del espacio de direcciones, el hardware verifica la VM primero, antes de agregarle la base.
+- Una forma (como la de arriba), mantiene el *tamaño* del espacio de direcciones, el hardware verifica la VM primero, antes de agregarle la base.
 
-* La segunda forma, mantiene la *dirección física* del final del espacio de direcciones, el hardware primero agrega la base y entonces se asegura que este dentro de los limites; por simplicidad, asumimos el primer metodo xd.
+- La segunda forma, mantiene la *dirección física* del final del espacio de direcciones, el hardware primero agrega la base y entonces se asegura que este dentro de los limites; por simplicidad, asumimos el primer metodo xd.
 
 ### Ejemplo de traducción
 
@@ -119,4 +119,103 @@ Es facil simplemente agregar la dirección base a la dirección virtual (la cual
 
 ---
 
-## Soporte del hardware: Resumen
+## Soporte del hardware: un Resumen
+
+| Requisitos de Hardware                  | Notas                                                                 |
+|-----------------------------------------|----------------------------------------------------------------------|
+| Modo privilegiado                       | Necesario para evitar que los procesos en modo usuario ejecuten operaciones privilegiadas. |
+| Registros base/límite                   | Necesita un par de registros por CPU para admitir la traducción de direcciones y la verificación de límites. |
+| Capacidad para traducir direcciones virtuales y verificar si están dentro de los límites | Circuitería para realizar traducciones y verificaciones; en este caso, es bastante simple. |
+| Instrucción(es) privilegiada(s) para actualizar base/límite | El SO debe poder establecer estos valores antes de permitir la ejecución de un programa de usuario. |
+| Instrucción(es) privilegiada(s) para registrar manejadores de excepciones | El SO debe poder informar al hardware qué código ejecutar si ocurre una excepción. |
+| Capacidad para generar excepciones      | Cuando los procesos intentan acceder a instrucciones privilegiadas o a memoria fuera de los límites. |
+
+Figure 15.3: **Reubicación dinámica: Requisitos del hardware**
+
+Primero necesitamos dos modos diferentes de CPU. El SO corre en **Modo privilegiado** o **modo kernel**, donde tiene acceso a la máquina entera; las aplicaciones corren en **modo usuario**, donde estan limitados en que pueden hacer. Un solo bit, obviamente guardado en algun tipo de **Palabra del estado del procesador**, indica en que modo esta actualmente la CPU, en ciertas ocaciones especiales la CPU cambia de modo.
+
+El hardware también debe proporcionar los registros bases y limite, cada CPU tiene un par adicional de registros, parte de la unidad de administración de memoria **MMU** de la CPU. Cuando un programa de usuario se esta ejecutando, el hardware traducira cada dirección, agregando el valor base a la dirección virtual generada por el programa. El hardware también debe ser capaz cuando la dirección es valida, lo cual se logra usando el registro limite y algun circuito en la CPU.
+
+El hardware debe proporcionar intrucciones especiales para modificar los registros base y limite, permitiendole al SO modificarlo cuando se ejecutan diferente procesos. Esas instrucciones son **Privilegiadas**: solo en modo kernel pueden modificarse los registros.
+
+La CPU debe ser capaz de generar **execpciones** en situaciones donde un programa de usuario intente acceder a memeria ilegalmente; la CPU deberia detener la ejecución del programa de usuario y hacer arreglos para que se ejecute el manejador de excepciones "fuera-de-limites" del SO. El manejador del SO puede averiguar como reaccionar, en este caso terminando el proceso. Si un programa de usuario intenta cambiar los valores de los registros base y limite, la CPU deberia lanzar una excepción y ejecutar el manejador "intentó ejecutar una operación privilegiada mientras esta en modo usuario". La CPU también debe proporcionar un metodo para informar la ubicación de estos controladores, y por lo tanto son necesarias mas intrucciones privilegiada.
+
+---
+
+## Problemas del SO
+
+Solo porque el hardware proporsiona nuevas caracteristicas para soportar reubicaciones dinamicas, el SO ahora tiene nuevos problemas que debe manejar; la combinación de soporte de hardware y administración del SO guia a la implementación de una simple VM. Hay varias coyunturas criticas donde el SO debe intervenir para implementar nuestra versión base-y-limite de VM.
+
+1. El SO debe entrar en acción cuando un proceso es creado, encontrar espacio en la memoria para su espacio de direcciones. Dadas nuestras suposiciones
+
+- **a)** Cada espacio de direcciones es mas chica que el tamaño de la memoria física
+
+- **b)** Todos los espacios de direcciones son del mismo tamaño, es un poco facil para el SO; simplemente ve la memoria física como como una cadena de slots, y rastrea si alguno esta libre o en uso.
+
+Cuando un proceso nuevo es creado, el SO tiene que buscar una estructura de datos (a menudo llamada **Free list**) para encontrar espacio para el nuevo espacio de direcciones y entonces marcarlo como usado. Como el espacio de direcciones es variable, la vida es mas complicada (la vida es una mierda).
+
+Ejemplo:
+
+![Figure 15.2](../imagenes/figure15_2.png)
+
+El SO esta usando el primer slot de la memoria física para el mismo, y que tiene al proceso de ese ejemplo reubicado en el slot que empieza en la dirección de la memoria física 32KB. los otros dos slots estan libres; la free list deberia consistir de esas dos entradas.
+
+2. El SO deberia hacer algun trabajo cuando un proceso termina, reclamando toda su memoria para usar en otro proceso o en el SO. En la terminación de un proceso el SO pone de vuelta esa memoria en la free list, y limpia cualquier estructura de dato asociada.
+
+3. El SO debe hacer algunos pasos adicionales cuando ocurre un cambio de contexto. Hay solo un par de registros base y limite en cada procesador, después de todo, y sus valores difieren por cada programa en ejecución, ya que cada programa es cargado en una dirección de memoria física diferente. EL SO debe **guardar y retornar** el par base-y-limite cuando cambia entre procesos. Cuando el SO decide parar de ejecutar un proceso, debe guardar esos valores en memoria, en alguna estructura por proceso como la **Process structure** o el **Process control block** (**PCB**). Cuando el SO remota un proceso, o lo ejecuta por primera vez, debe establecer los valores de base y limite en la CPU a los valores correctos de ese proceso.
+
+Notar que cuando un proceso esta parado, es posible para el SO mover un espacio de direcciones de una ubición a otro mas facilmente. Para mover el espacio de direcciones de un proceso, el SO primero desplanifica el proceso; el SO copia el espacio de direcciones de la ubicación actual a una nueva ubicación; el SO actualiza el registro base guardado al punto de la nueva ubicación. Cuando un proceso es retomado, su nuevo registro base es recuperado, y comienza a ejecutarse de nuevo, sin saber que sus instrucciones y datos estan en un lugar completamente diferente de la memoria.
+
+4. El SO debe proporsionar un **manejador de excepciones**, o funciones para ser llamadas; el SO instala esos manejadores en tiempo de booteo. Por ejemplo, si un proceso intenta acceder a memoria fuera de sus limites, el SO lanzara una excepción; el SO debe estar preparado para entrar en acción cuando surga una excepción como esa. La reacción comun del SO sera hostil: Terminara con el proceso. El SO debe ser tremendamente de la máquina en la se esta ejecutando, no tomara amablemente a un proceso que intenta acceder a memoria o ejecutar una instrucción que no deberia.
+
+| Sistema Operativo al Inicio (modo kernel) | Hardware                                     | (Sin Programa Aún)                     |
+|-------------------------------------------|---------------------------------------------|-----------------------------------------|
+| Inicializar tabla de interrupciones       | Recordar las direcciones de...              |                                         |
+|                                           | - Manejador de llamadas al sistema          |                                         |
+|                                           | - Manejador de temporizador                 |                                         |
+|                                           | - Manejador de acceso ilegal a memoria      |                                         |
+|                                           | - Manejador de instrucciones ilegales       |                                         |
+| Iniciar temporizador de interrupciones    | Iniciar temporizador; interrumpir después de X ms |                                         |
+| Inicializar tabla de procesos             |                                             |                                         |
+| Inicializar lista libre                   |                                             |                                         |
+
+Figure 15.5: **Ejecución Directa limitada (reubicación dinámica)  Tiempo de inicio**
+
+| Sistema Operativo en Ejecución (modo kernel) | Hardware                                       | Programa (modo usuario)                   |
+|----------------------------------------------|-----------------------------------------------|-------------------------------------------|
+| Para iniciar el proceso A:                   |                                               |                                           |
+| - Asignar entrada en la tabla de procesos    |                                               |                                           |
+| - Asignar memoria para el proceso            |                                               |                                           |
+| - Establecer registros base/límite           |                                               |                                           |
+| - `return-from-trap` (a A)                   | Restaurar registros de A                     |                                           |
+|                                              | Mover a modo usuario                         |                                           |
+|                                              | Saltar al PC inicial de A                    |                                           |
+|                                              |                                               | **El Proceso A se ejecuta**               |
+|                                              |                                               | Obtener instrucción                       |
+|                                              | Traducir dirección virtual                   | Ejecutar instrucción                      |
+|                                              | Realizar lectura                              |                                           |
+|                                              | Si es una operación explícita de carga/almacenamiento: |                                           |
+|                                              | - Asegurar que la dirección es legal         |                                           |
+|                                              | - Traducir dirección virtual                 |                                           |
+|                                              | - Realizar carga/almacenamiento             |                                           |
+|                                              |                                               | (A se ejecuta...)                         |
+| **Interrupción del temporizador**            | Mover a modo kernel                          | Saltar al manejador                       |
+| Manejar el temporizador:                     |                                               |                                           |
+| - Decidir: detener A, ejecutar B             |                                               |                                           |
+| - Llamar a la rutina `switch()`              |                                               |                                           |
+| - Guardar registros (A)                      |                                               |                                           |
+|   (incluyendo base/límite)                   |                                               |                                           |
+| - Restaurar registros (B)                    |                                               |                                           |
+|   (incluyendo base/límite)                   |                                               |                                           |
+| - `return-from-trap` (a B)                   | Restaurar registros de B                     |                                           |
+|                                              | Mover a modo usuario                         |                                           |
+|                                              | Saltar al PC de B                            | **El Proceso B se ejecuta**               |
+|                                              |                                               | Ejecutar instrucción incorrecta           |
+| Manejar la trampa:                           |                                               |                                           |
+| - Decidir terminar el proceso B              |                                               |                                           |
+| - Liberar la memoria de B                    |                                               |                                           |
+| - Eliminar la entrada de B en la tabla de procesos |                                               |                                           |
+
+Figure 15.6: **Ejecución Directa limitada (reubicación dinámica)  Tiempo de ejecución**
+
+La primera tabla muestra que hace el SO al iniciarse para preparar la máquina para su uso, y la segunda muestra que sucede cuando un proceso (A) empieza a ejecutarse; notar como su traducción de memoria es manejada por el hardware sin intervención del SO. En algun punto, una interrupción ocurre, y el SO cambia al proceso B, el cual ejecuta una mala carga; en este punto, el SO debe intervenir, terminando el proceso y limpiandolo liberando la memoria de B y removiendo su entrada de la tabla de procesos. Como podemos ver en los cuadros, todavia estamos siguiendo el enfoque de ejecución directa limitada. El SO solo configura el hardware apropiadamente y deja a los procesos ejecutarse directamente en la CPU; solo cuando el proceso se porta mal hace que el SO intervenga.
