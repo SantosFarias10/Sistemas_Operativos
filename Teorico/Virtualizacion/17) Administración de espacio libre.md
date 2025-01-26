@@ -157,7 +157,7 @@ Ultimo ejemplo: Asumamos ahora que los ultimos dos chunk que estan en uso son li
 
 ![Figure 17.7](../imagenes/figure17_7.png)
 
-Figure 17.7: **Una free list no funcionada**
+Figure 17.7: **Una free list no fucionada**
 
 Como vemos, tenemos un gran desorden ¿Porque? simple, olvidamos **Fusionar** la lista. A pesar de que toda la memoria esta libre, esta cortado en piezas, por lo que aparenta ser una memoria fraccionada y no una sola. La solución: Vamos a traves de la lista y **Ordenamos** los chunks vecinos; cuando terminemos, el heap estara completo otra vez.
 
@@ -217,3 +217,34 @@ Queda un chunk libre pequeño. Un enfoque **Worst-Fit** es similar pero encambio
 
 - ### Listas segregadas (separadas)
 
+Esta idea es simple: Si una aplicación particular tiene una (o varias) peticiones de tamaño popular, mantener una lista separada solo para administrar objetos de ese tamaño; todas las otras peticiones se reenvian a un asignador de memoria mas general.
+
+Los beneficios son obvios. Tener un chunk de memoria dedicado a peticiones de un tamaño peticular, la fragmentación es una preocupación menos; las peticiones de asignación y liberación pueden ser tratadas mas rapidamente cuando tienen el tamaño adecuado, ya que no se requiere una busqueda complicada de una lista.
+
+Este enfoque también introduce complicaciones al sistema. Por ejemplo, ¿Cuanta memoria le podemos dedicar a un grupo de memoria que sirve a peticiones especializadas de un tamaño dado, a diferencia del grupo general? un asignador particular, el **slab allocator** maneja este problema de una buena forma.
+
+Cuando el kernel inicia, asigna un numero de **object caches** para el kernel que probablemente seran pedidos frecuentemente; el object caches son free list separadas de un tamaño dado que esta sirven a las peticiones de asignación y libración de memoria rapidamente. Cuando un cache determinado se esta quedando sin memoria, pide algunos **slabs** de memoria al asignador de memoria general (la cantidad de memoria total pedida es un multiplo del tamaño y el objeto en cuestion). Por lo contrario, cuando el conteo de referencia de los objetos dentro de un **slab** dado llegan a cero, el asignador general puede recuperarlo del asignador especializado, lo que a menudo se hace cuando el sistema de VM necesita mas memoria.
+
+El asignador **slab** va mas alla del enfoque de listas separadas manteniendo los objetos libres en la lista en un estado pre-inicializado. La inicialización y destrucción de estructuras de datos es costoso; manteniendo los objetos libres en una lista particular en su estado inicializado, el asignador slab puede evitar inicializaciones frecuentes y ciclos de destrucción por objeto y por lo tanto bajo los costos notablemente.
+
+- ### Buddy Allocation
+
+Dado que la fusión es critica para un asignador, algunos enfoques han sido diseñados haciendo fusión simple. Un buen ejemplo es encontrado en el **Binary Buddy Allocator**.
+
+En dicho sistema, la memoria libre primero es pensando como un gran espacio de tamaño $2^{N}$. Cuando se hace una petición de memoria, la busqueda de espacio libre recursivamente divide el espacio libre en dos hasta que encuentra un bloque lo suficientemente grande para acomodar la petición. En este punto, el bloque pedido es retornado al usuario. Un ejemplo de un espacio libre siendo dividido en la busqueda de un bloque de 7KB:
+
+![Figure 17.8](../imagenes/figure17_8.png)
+
+Figure 17.8: **Ejemplo Buddy-managed heap**
+
+En el ejemplo, el bloque de memoria de 8KB mas a la izquierda es asignado (como lo indica la sombra gris oscura) y retornado al usuario; notar que este esquema puede sufrir de **Fragmentación interna**, dado que solo puede dar bloques de tamaño multiplo de potencias de dos.
+
+Lo lindo de **Buddy Allocation** se encuentra en lo que sucede cuando un bloque es liberado. Cuando devuelve el bloque de 8KB a la free list, el asignador verifica si el "buddy" ("compañero") de 8 KB está libre; si es así, fusiona los dos bloques en un bloque de 16 KB. Luego, el asignador verifica si el compañero del bloque de 16 KB esta linre; si lo esta, los fuciona. Esta fusion recursiva continua por el arbol, hasta que restaura todo el espacio libre o parando cuando un compañero esta en uso.
+
+La razón por la que **Buddy Allocation** funciona tan bien es que es simple determinar el compañero de un bloque en particular. ¿Cómo? Pensa en las direcciones de los bloques en el espacio libre de arriba. si sos suficientemente cuidadoso, veras que las dirección de cada par de compañeros difiere en un solo bit, el cual es determinado por el nivel en el arbol de compañeros. Y por lo tanto tiene una dea basica de como funciona el esquema binary buddy allocation.
+
+### Otras ideas
+
+Un problema mayor con muchos de los enfoques descriptos anteriormente es su falta de **Escalabilidad**. Especificamente, buscar en listas puede ser muy lento. Por lo que, asignadores mas avanzados usan estructuras de datos mas complejas para direccionar estos costos, cambiando simplicidad por eficiencia. Algunos ejemplos son arboles binarios balanceados, splay trees, o arboles parcialmente ordenados.
+
+Dado que los sistemas modernos a menudo tiene multiples procesadores y ejecutan carga de trabajo multihilo, no sorprende que muchos de los esfuerzos han sido centrados en los asignadores funciones bien en sistemas bastados en multiprocesadores.
