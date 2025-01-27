@@ -183,7 +183,7 @@ Por lo que nos concierne solo necesitamos unas pocas paginas virtuales sobre las
 
 Lo siguiente, es el mismo array. Su tamaño es de 4000 bytes (1000 enteros), y asumimos que reside en la dirección virtual desde 40000 hasta 44000. La paginas virtuales para este rango decimal son VPN = 39 ... VPN = 42. Por lo tanto, necesitamos mapear esas paginas. Asumimos este mapeo virtual-físico para el ejemplo: (VPN 39 -> PFN 47), (VPN 40 -> PFN 41), (VPN 41 -> PFN 9), (VPN 42 -> PFN 10).
 
-Ahora estamos listos para rastrear las referencias de memoria del programa. Cuando se ejecuta. Cada instrucción fetch generara dos referencias a memoria: una a la page table para encontrar el frame físico en la que la instrucción reside, y otra para la misma instrucción para llevarla a la CPU para procesarla. Ademas; hay una referencia a memoria explicita en la instrucción `mov`; primero agrega otro acceso a la page table (para traducir el array de dirección virtual a la correcta dirección física) y luego otro acceso al mismo array. 
+Ahora estamos listos para rastrear las referencias de memoria del programa. Cuando se ejecuta. Cada instrucción fetch generara dos referencias a memoria: una a la page table para encontrar el frame físico en la que la instrucción reside, y otra para la misma instrucción para llevarla a la CPU para procesarla. Ademas; hay una referencia a memoria explicita en la instrucción `mov`; primero agrega otro acceso a la page table (para traducir el array de dirección virtual a la correcta dirección física) y luego otro acceso al mismo array.
 
 ![Figure 18.7](../imagenes/figure18_7.png)
 
