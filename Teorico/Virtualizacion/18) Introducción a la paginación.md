@@ -142,3 +142,53 @@ Finalmente, el hardware puede buscar los datos deseados de la memoria y ponerlos
 ---
 
 ## Un rastro de memoria
+
+Analicemos un ejemplo de acceso a la memoria para demostrar todos los accesos a la memoria resultantes que ocurren cuando usamos paginación. El fragmento de código en el que estamos interesados es el siguiente:
+
+```c
+int array[1000];
+...
+for (int i = 0; i < 1000; i++){
+  array[i] = 0;
+}
+```
+
+Compilamos y ejecutamos `array.c` con los siguientes comandos:
+
+```shell
+prompt> gcc -o array array.c -Wall -O
+prompt> ./array
+```
+
+Para verdaderamente enteder que acceso de memoria hara este fragmento de código tenemos que saber un par de cosas. Primero, tenemos que **desensamblar** el binari resultante (usando objdump en linux o otool en mac) para ver que instrucción assembly son usandas para inicializar el array en el loop. Este es el resultado:
+
+```assembly
+movl $0x0,(%edi,%eax,4)
+incl %eax
+cmpl $0x03e8,%eax
+jne 0x1024
+```
+
+La primera instrucción mueve el valor dero en la dirección de la memoria virtual de la ubicación del array; esta dirección es computado tomando el contenido de `%edi` y sumando `%eax` multiplicado por cuatro. `%edi` mantiene la dirección base del array, `%eax` mantiene el indice del array; lo multiplicamos por cuatro dado que el array es un array de enteros, cada posición es de 4 bytes.
+
+La segunda instrucción incrementa el indice del array que esta en `%eax`, y la tercera instrucción compara el contenido de ese registro con el valor hexa 0x03e8, o decimal 1000. Si la comparación muestra que los valores todavia no son iguales, la cuarta instrucción salta de nuevo al inicio del bucle.
+
+Para entender que acceso de memoria hacer esta secuencia de instrucciones, asumimos algo sobre la ubicación dentro de la memoria virtual del fragmento de código y el array, asi como el contenido y la ubicación de la page table.
+
+Para este ejemplo, asumimos un espacio de direcciones de tamaño de 64 KB. También asumimos un tamaño de pagina de 1 KB.
+
+Todo lo que necesitamos saber ahora es el contenido de la page table y la ubicación en la memoria física. Asumimos que tenemos una page table lineal y que esta ubicada en la dirección física 1 KB (1024).
+
+Por lo que nos concierne solo necesitamos unas pocas paginas virtuales sobre las que preocuparnos para tener el mapeo de este ejemplo. Primero, esta la pagina virtual del código. Dado que el tamaño de pagina es de 1 KB, la dirección virtual 1024 reside en la segunda pagina del espacio de direcciones. Asumimos que esta pagina virtual mapea al frame físico 4 (VPN 1 -> 4).
+
+Lo siguiente, es el mismo array. Su tamaño es de 4000 bytes (1000 enteros), y asumimos que reside en la dirección virtual desde 40000 hasta 44000. La paginas virtuales para este rango decimal son VPN = 39 ... VPN = 42. Por lo tanto, necesitamos mapear esas paginas. Asumimos este mapeo virtual-físico para el ejemplo: (VPN 39 -> PFN 47), (VPN 40 -> PFN 41), (VPN 41 -> PFN 9), (VPN 42 -> PFN 10).
+
+Ahora estamos listos para rastrear las referencias de memoria del programa. Cuando se ejecuta. Cada instrucción fetch generara dos referencias a memoria: una a la page table para encontrar el frame físico en la que la instrucción reside, y otra para la misma instrucción para llevarla a la CPU para procesarla. Ademas; hay una referencia a memoria explicita en la instrucción `mov`; primero agrega otro acceso a la page table (para traducir el array de dirección virtual a la correcta dirección física) y luego otro acceso al mismo array. 
+
+![Figure 18.7](../imagenes/figure18_7.png)
+
+Figure 18.7: **Una traza de memoria virtual (y física)**
+
+Vemos en la figure el proceso entero para las primeras cinco vueltas del ciclo.
+
+En la parte mas baja del grafico se muestran las referencia a memoria de la instrucción en el eje Y en negro (con las direcciones virtuales a la izquierda, y las direcciones físicas a la derecha); la parte del medio muestra los accesos al array en gris; finalmente, la parte mas alta muestra los accesos a memoria de la page table en gris claro. El eje X, para el rastro completo, muestra los accesos a memoria a lo largo de las primeras cinco iteraciones del loop; hay 10 accesos a memoria por cada iteración, los cuales incluyen cuatro intrucciones fetch, una actualización explicita de memoria, y cinco accesos a memoria de page table para traducir esas cuatro fetch y una actualización explicita.
