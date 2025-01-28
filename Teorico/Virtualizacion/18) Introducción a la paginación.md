@@ -30,7 +30,7 @@ Otra ventaja es la ***simplicidad*** de la administración del espacio libre que
 
 Para recordar donde esta ubicada cada pagina virtual del espacio de direcciones en la memoria física, el SO usualmente mentiene a una estructura de datos conocida como **Page table** por ***Proceso***. El rol principal de la page table es guardar **traducciones de direcciones** para cada pagina virtual del espacio de direcciones, por lo tanto, permitiendonos saber en que lugar de la memoria física esta cada pagina. Para nuestro ejemplo, la page table deberia tener las siguientes cuatro entradas: (Virtual page 0 -> Physical Frame 3), (Virtual page 1 -> Physical frame 7), (Virtual page 2 -> Phhysical frame 5) y (Virtual page 3 -> physical frame 2).
 
-Importante recordar que esta page table es una estructura de datos por proceso. Si otro proceso se ejecuta en nuestri ejemplo, el SO deberia tener una page table para el, dado que sus paginas virtuales obviamente mapean a diferentes paginas físicas.
+Importante recordar que esta page table es una estructura de datos por proceso. Si otro proceso se ejecuta en nuestro ejemplo, el SO deberia tener una page table para el, dado que sus paginas virtuales obviamente mapean a diferentes paginas físicas.
 
 Ahora, sabemos lo suficiente para hacer un ejemplo de traducción de dirección. Imaginemos que el proceso con ese pequeño espacio de direcciones (64 bytes) esta haciendo un acceso a memoria.
 
