@@ -20,7 +20,7 @@ El espacio que esta libreria administran es conocido historicamente como **heap*
 
 Asumimos que nos vamos a centrar en la **fragmentación externa**. Como dijimos antes. Los asignadores por supuesto también tienen problemas de **fragmentación interna**; si un asignado recibe chunks de memoria mas grande de los que pidio, tal espacio es considerado **fragmentación interna** y es otro ejemplo de espacio desperdiciado. Pero, por motivos de simplicidad, solo vamos a ver la fragmentación externa.
 
-Suponemos que una vez que la memoria es entrefada a un cliente no puede ser reubicada en otra ubicación de la memoria. Por ejemplo, si un programa llama a `malloc()` y le entrega un puntero a algun espacio en el heap, esa region de la memoria es esencialmente "propiedad" del programa (y no puede ser movida por la libreria) hasta que el programa la devuelva a traves de la correspondiente llamada a `free()`. Por lo que, no compactaremos el espacio libre si es posible, lo cual debera ser util para combatir la fragmentación. La compactación deberia ser usada en el SO para tratar con la fragmentación cuando implementa **segmentación**.
+Suponemos que una vez que la memoria es entregada a un cliente no puede ser reubicada en otra ubicación de la memoria. Por ejemplo, si un programa llama a `malloc()` y le entrega un puntero a algun espacio en el heap, esa region de la memoria es esencialmente "propiedad" del programa (y no puede ser movida por la libreria) hasta que el programa la devuelva a traves de la correspondiente llamada a `free()`. Por lo que, no compactaremos el espacio libre si es posible, lo cual debera ser util para combatir la fragmentación. La compactación deberia ser usada en el SO para tratar con la fragmentación cuando implementa **segmentación**.
 
 Finalmente, suponemos que el asginador administra una region contigua de bytes. Un asignador podria requerir que una region crezca; por ejemplo, una libreria de asignación de memoria a nivel de usuario podria llamar dentro del kernel para agrandar el heap. Pero, por simplicidad, suponemos que la region es de un solo tamaño en toda su vida.
 
@@ -38,7 +38,7 @@ La free list para este heap deberia tener dos elementos. Una entrada describe el
 
 ![Example](../imagenes/example1.png)
 
-Como dijimos, una petición por cualquier cosa mas grande de 10 bytes fallara y retornara `NULL`; no hay un unico chunk contiguo de memoria disponible de este tamaño. Una petución para exactamente 10 bytes se podria satisfacer facilmente por cualquiera de los dos chunk libres. Pero ¿Qué pasa si la petición es por algo mas chico de 10 bytes?
+Como dijimos, una petición por cualquier cosa mas grande de 10 bytes fallara y retornara `NULL`; no hay un unico chunk contiguo de memoria disponible de este tamaño. Una petición para exactamente 10 bytes se podria satisfacer facilmente por cualquiera de los dos chunk libres. Pero ¿Qué pasa si la petición es por algo mas chico de 10 bytes?
 
 Supongamos que tenemos una petición de un solo bytes de memoria. El asignador hara una acción conocida como **División**: Encontrara un chunk libre de memoria que pueda satisfacer la petición y lo dividira en dos. El primer chunk lo retornara al que hizo la petición; y el segundo permanecera en la lista. Por lo que, en nuestro ejemplo, si se hace una petición de un byte, el asignador decide usar el segundo de los dos elementos de la lista para satisfacer la petición, la llamada a `malloc()` retornara 20 (la dirección de la region de 1 byte) y la lista quedara algo asi:
 
@@ -60,7 +60,7 @@ Lo que hacen los asignadores para evitar este problema es fusionar el espacio li
 
 por supuesto, asi es como se ve el heap al inicio, antes de que se haga cualquier asignación. Con la fusión, un asignador puede tener la certeza que grandes extensiones libres estan disponibles para la aplicación.
 
-### Rastreando el tamaño de las regiones asignadas+
+### Rastreando el tamaño de las regiones asignadas
 
 Notar que la interfaz para `free(void *ptr)` no toma por parametro un tamaño; por lo que es asumido por el puntero dado, la libreria `malloc()` puede determinar rapidamente la dimensión de la región de memoria a liberar y puede incorporar de vuelta en la free list.
 
@@ -127,7 +127,7 @@ Después de ejecutar este código, el estado de la lista es que tiene una sola e
 
 Figure 17.3: **Un heap con un chunk libre**
 
-Ahora imaginemos que un chunk de memoria es pedido, digamos de tamaño de 100 bytes. Para cumplor con esta petición, la libreria primero encontrara un chunk del largo suficiente para acomodar la petición; dado que hay un solo chunk libre (de tamaño 4088), elegira este chunk. El chunk sera **dividido** en dos: un chunk suficientemente grande para servir a la petición (mas el encabezado), y el resto como chunk libre. Asumamos un encabezado de 8 bytes, el espacio en el heap ahora se veria asi:
+Ahora imaginemos que un chunk de memoria es pedido, digamos de tamaño de 100 bytes. Para cumplir con esta petición, la libreria primero encontrara un chunk del largo suficiente para acomodar la petición; dado que hay un solo chunk libre (de tamaño 4088), elegira este chunk. El chunk sera **dividido** en dos: un chunk suficientemente grande para servir a la petición (mas el encabezado), y el resto como chunk libre. Asumamos un encabezado de 8 bytes, el espacio en el heap ahora se veria asi:
 
 ![Figure 17.4](../imagenes/figure17_4.png)
 
@@ -193,7 +193,7 @@ Tiene la ventaja de la velocidad pero a veces contamina el inicio de la free lis
 
 - ### Next Fit
 
-Mantiene un puntero adicional a la ubicación dentro del lista donde se miró por última vez. La idea es repartir las búsquedas de espacio libre por toda la lista de forma mpas uniforme, evitando así fragmentación. El desempeño de este enfoque es muy similar a first fit, una vez mas se evita la busqueda exhaustiva.
+Mantiene un puntero adicional a la ubicación dentro del lista donde se miró por última vez. La idea es repartir las búsquedas de espacio libre por toda la lista de forma mas uniforme, evitando así fragmentación. El desempeño de este enfoque es muy similar a first fit, una vez mas se evita la busqueda exhaustiva.
 
 ### Ejemplos
 
