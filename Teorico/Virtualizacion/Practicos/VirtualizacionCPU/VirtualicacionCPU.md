@@ -182,3 +182,64 @@ SJF (Shortest Job First)
 |  0  |  5  | 10  | 15  | 20  | 25  | 30  | 35  | 40  | 45  | 50  | 55  | 60  | 65  | 70  | 75  | 80  | 85  | 90  | 95  |
 |----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|
 | C  | C  | C  | B  | B  | B  | A  | A  | A  | A  | A  | A  | A  | A  |    |    |    |    |    |    |
+
+---
+
+![Ejercicio 14](../VirtualizacionCPU/imagenes/ej14cpu.png)
+
+* **STCF**
+
+| **Tiempo**  |  0  |  1  |  2  |  3  |  4  |  5  |  6  |  7  |  8  |  9  | 10  | 11  | 12  | 13  | 14  | 15  | 16  | 17  | 18  | 19  |
+|-------------|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|
+| **Running** | $B^{3}$ | $B^{2}$ | $B^{1*}$ | $A^{4}$ | $C^{1*}$ | $A^{3}$ | $A^{2}$ | $A^{1}$ |    |    |    |    |    |    |    |    |    |    |    |    |
+| **Arribos** | B  |    | A   |    | C   |    |    |    |    |    |    |    |    |    |    |    |    |    |    |    |
+| **Ready**   |    | A  |     |    |     | A  | A  |    |    |    |    |    |    |    |    |    |    |    |    |    |
+
+* Se compara con A y gana B por tener menos $T_{CPU}$, entonces sigue ejecutando B.
+
+* Igual que antes, C tiene menos $T_{CPU}$ que A, C gana por política STCF. A queda en Ready esperando a que termine C.
+
+**Desempate**: El que estaba corriendo que siga corriendo. Es caro de cambiar entre procesos pa.
+
+| **Proceso** | $T_{arrival}$ | $T_{CPU}$ | $T_{firstrun}$ | $T_{completion}$ | $T_{turnaround}$ | $T_{response}$ |
+|------------|----------------|------------|----------------|------------------|----------------|--------------|
+| **A**      | 2              | 4          | 3              | 7                | 5              | 0            |
+| **B**      | 0              | 3          | 0?             | 2?               |                |              |
+| **C**      | 4              | 1          | 4?             | 4?               |                |              |
+
+* **RR** (Los procesos solo se ejecutan durante 2 quantos, luego van al final de la cola).
+
+| **Tiempo**    | 0   | 1   | 2   | 3   | 4    | 5   | 6   | 7   | 8   | 9   | 10  | 11  | 12  | 13  | 14  | 15  |
+|--------------|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|
+| **Running**  | $B^{3}$ | $B^{2}$ | $A^{4}$ | $A^{3}$ | $C^{1*}$ | $B$ | $A^{2}$ | $A^{1}$ |    |    |    |    |    |    |    |    |
+| **Arribos**  | B  |    | A  |    | C  |    |    |    |    |    |    |    |    |    |    |    |
+| **Ready** ¿Cola? |    | B  | B  | B  | **B** <br> **A** | A  |    |    |    |    |    |    |    |    |    |    |
+| **Qs Restantes** | $B:3$ | $B:2$ | $A:4$ | $A:3$ | $C:1$ | $B:1$ | $A:2$ | $A:1$ |    |    |    |    |    |    |    |    |
+
+* C tiene $T_{CPU} = 1$, sólo dura 1 quanto. Había simultaneidad entre B y C, nos decidimos por el C por política de prioridad: el proceso que entra se ejecuta. Esta política debe ser consistente para cada paso recurrente.
+
+Posibles plíticas para tratar el desempate:
+
+* Podrías darle prioridad a procesos que recién aparecen o arriban.
+
+* Decido ejecutar el que ejecute antes. Rezando que está cacheado o algo asi.
+
+* Decido ejecutar el C porque no se ejecutó ninguna vez, para ser justo.
+
+---
+
+![Ejercicio 15](../VirtualizacionCPU/imagenes/ej15cpu.png)
+
+| **Algoritmo** | **Batch/Interactivo** | ¿Necesita saber ($T_{cpu}$)? |
+|--------------|------------------------|----------------------------------|
+| **FIFO**     | Batch                  | No                               |
+| **SJF**      | Batch                  | Sí                               |
+| **RR**       | Interactivo            | No                               |
+| **STCF**     | 50/50                  | Sí                               |
+| **MLFQ**     | Interactivo            | No                               |
+
+Interactivo = Tiempo de respuesta corto.
+
+¿Porque 50/50 el STCF? No corta por quanto (no es interactivo en ese sentido), pero si es interactivo si llegan procesos cortos.
+
+---
