@@ -181,7 +181,7 @@ SJF (Shortest Job First)
 
 |  0  |  5  | 10  | 15  | 20  | 25  | 30  | 35  | 40  | 45  | 50  | 55  | 60  | 65  | 70  | 75  | 80  | 85  | 90  | 95  |
 |----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|
-| C  | C  | C  | B  | B  | B  | A  | A  | A  | A  | A  | A  | A  | A  |    |    |    |    |    |    |
+| C  | C  | C  | B  | B  | B  | A  | A  | A  | A  | A  | A  | A  | A  | —  | —  | —  | —  | —  | —  |
 
 ---
 
@@ -243,3 +243,60 @@ Interactivo = Tiempo de respuesta corto.
 ¿Porque 50/50 el STCF? No corta por quanto (no es interactivo en ese sentido), pero si es interactivo si llegan procesos cortos.
 
 ---
+
+![Ejercicio 16](../VirtualizacionCPU/imagenes/ej16cpu.png)
+
+$T_{CPU}$ total de cada proceso es: A = 6, B = 14, C = 6.
+
+**RR** (Q = 2) los procesos solo se ejecutan durante 2 quantos, luego van al final de la cola.
+
+| **Tiempo**    | 0  | 1  | 2  | 3  | 4  | 5  | 6  | 7  | 8  | 9  | 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17 | 18 | 19 | 20 | 21 | 22 | 23 | 24 | 25 |
+|---------------|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|
+| **Running (CPU)**  | $A^{3}$ | $A^{2}$ | $C^{1}$ | $B^{8}$ | $B^{7}$ | $A^{1}$ | $B^{6}$ | $B^{5}$ | $C^{2}$ | $C^{1}$ | $B^{4}$ | $B^{3}$ | $A^{2}$ | $A^{1}$ | $B^{2}$ | $B^{1}$ | $C^{1}$ | $B^{6}$ |$B^{5}$ | $A^{1}$ | $B^{4}$ | $B^{3}$ | $C^{2}$ | $C^{1}$ | $B^{2}$ | $B^{1}$ |
+| **Blocked (I/O)**  |    |    | C  | C  | A  | A  | A  | A  | C  |    | C  |    | C  | C  |    |    | B, A | A, C |    | C  | C  | C  | C  |    |    |
+| **Arribos**   | A  |    | C  | B  |    |    | C  |    |    |    |    | A  |    |    |    |    |    |    |    |    |    |    | C  |    |    |    |
+| **Ready Cola**| C  | B  | A  | A  | A  | A  | B  | C  | B  | B  | A  | B  | B  |    | C  |    |    | C   | B   | B  |    |    | B  | B  | B  |    |
+| **Término**   |    |    |    |    |    |    |    |    |    |    |    |    |    | A  |    |    |    |    |    | A  |    |    |    |    | A  | C  |
+
+Política: Si un proceso A termina su quanto al MISMO tiempo que arriba B, el proceso B va primero en la cola Ready.
+
+---
+
+![Ejercicio 17](../VirtualizacionCPU/imagenes/ej17cpu.png)
+
+| **T** | 0  | 1  | 2   | 3   | 4   | 5   | 6   | 7   | 8    | 9    | 10   | 11   | 12  | 13  | 14  | 15  | 16  | 17  | 18  | 19  | 20  |
+|-------|----|----|-----|-----|-----|-----|-----|-----|------|------|------|------|-----|-----|-----|-----|-----|-----|-----|-----|-----|
+| **Q₁**| **A**  | **B**  | **C**  |    | **D**    |     |     |     | **E**    |      |      |      |     |     |     |     |     |     |     |     |     |
+| **Q₂**|    | A  | BA  | CB**A** | CBA | DCB**A**| DC**B** | DCB | EDCB* | ED**C**  | ED**C**  | E**D**   | ED*  | **E**   | **E**   |     |     |     |     |     |     |
+| **Q₄**|    |    |     |     |     |     | A    | A   | A    | A    | A    | A    | CA  | CA  | CA  | EC**A** | EC**A** | EC**A** | EC*  | EC*  | E*   |
+| **Q₈**|    |    |     |     |     |     |     |     |      |      |      |      |     |     |     |     |     |     |     |     |     |
+
+En **negrita** estan marcados los procesos que se ejecutan en el tiempo.
+
+Los que tengan un * a la derecha cada proceso en en el tiempo que termina.
+
+Si un proceso ejecuta la cantidad (n) de quantos correspondiente a cada cola de prioridad, baja a la siguiente cola de prioridad. Esta ejecución puede ser incontinua. ->politica MLFQ, acumula las ejecuciones del proceso en la cola para mandarlo a una cola de menor prioridad.
+
+---
+
+![Ejercicio 18](../VirtualizacionCPU/imagenes/ej18cpu.png)
+
+* **(a)**
+
+**Falso**. El STCF compara los procesos entrantes con los actuales y elige cual continuar, independientemente si el proceso actual "gasto" su quantum o no.
+
+* **(b)**
+
+**Falso**. En el caso de que al SJF le llegue un proceso largo antes de los cortos, tiene el mismo tarnaround time que el FCFS.
+
+* **(c)**
+
+**Verdadero**. Significa que cada proceso puede ejecutarse sin interrupciones hasta que termine. En este caso, el comportamiento se asemeja al de FCFS, donde los procesos se ejecutan en el orden en que llegan sin interrupciones.
+
+* **(d)**
+
+**Verdadero**. Si hay constantemente procesos de alta prioridad en la cola, los procesos de baja prioridad pueden no recibir suficiente tiempo de CPU para ejecutarse, lo que puede llevar a que nunca terminen.
+
+* **(e)**
+
+**Verdadero**. El "Allot" se gasta igual independientemente si el proceso hace I/O o no.
