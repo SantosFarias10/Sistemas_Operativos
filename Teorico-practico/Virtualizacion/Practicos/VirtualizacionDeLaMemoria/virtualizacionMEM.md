@@ -150,7 +150,7 @@ Si. Al tener 64 entradas, se puede llegar a dar el caso si es que `N < 1024 * 64
 
 Tenemos $2^{4}$ = 16 bits de virtual page number (VPN) y de $2^{12}$ (4096) bits del tamaño de pagina, hay $2^{4} * 2^{12} = 2^{16}$ (64 KB) bits de direccionamiento en cada espacio.
 
-* **(b)**
+* **(b)** De virtual -> Física
 
     * **39424** = (1001 1010 0000 0000). Entonces VPN = (1001) = 9 que es valida y un offset = (1010 0000 0000) por lo que la PFN = **(0110 1010 0000 0000)**.
 
@@ -172,10 +172,22 @@ Tenemos $2^{4}$ = 16 bits de virtual page number (VPN) y de $2^{12}$ (4096) bits
 
     * **4032** = (0000 1111 1100 0000). Entonces VPN = (0000) = 0 que es valida y un offset = (1111 1100 0000) por lo que la PFN = **(0000 1111 1100 0000)**.
 
-* **(c)**
+* **(c)** De física -> virtual
 
     * **16385** = (0100 0000 0000 0001). Entonces PFN = (0100) y offset = (0000 0000 0001) por lo que la VPN = 4 o 10 = (0100) o (1010). Entonces la direccion virtual es **(0100 0000 0000 0001)** o **(1010 0000 0000 0001)**.
 
     * **4321** = (0001 0000 1110 0001). Entonces PFN = (0001) y offset = (0000 1110 0001) por lo que la VPN = 5 = (0101). Entonces la direccion virtual es **(0101 0000 1110 0001)**
+
+---
+
+![Ejercicio 13](../VirtualizacionDeLaMemoria/imagenes/ej13mem.png)
+
+(10, 10 ,12) esto significa que tenemos 10 bits para el Page Directory, 10 bits para la Page talbe y 12 bits para el offset.
+
+* **0x003FF666** = (0000 0000 0011 1111 1111 0110 0110 0110). Entonces PDI = (0000 0000 00) = 0x0, PTE = (11 1111 1111) = 0x3FF = 1023, offset = 0x666. **PhysicalAddress = 0xCAEEA666**.
+
+* **0x00000AB0** = (0000 0000 0000 0000 0000 1010 1011 0000). Entonces PDI = 0x0, PTE = 0x0, offset = 0xAB0. **PhysicalAddress = 0xCAFECAB0**.
+
+* **0x00800B0B** = (0000 0000 1000 0000 0000 1011 0000 1011). Entonces PDI = 0x2, PTE = 0x0, offset = 0xBOB. PhysicalAddress = 0x{No tiene nada definido xd}B0B **(0x00000B0B)**.
 
 ---
