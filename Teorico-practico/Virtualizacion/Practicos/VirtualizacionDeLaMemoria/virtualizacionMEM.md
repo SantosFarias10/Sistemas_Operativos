@@ -122,3 +122,60 @@ La **relocalización estática** se usa el software para obtener la dirección f
 
 ![Ejercicio 10](../VirtualizacionDeLaMemoria/imagenes/ej10mem.png)
 
+Tenemos 0,95 * (10 ns + 120 ns) = 123,5 ns es el tiempo promedio que le lleva completar una operación cuando hay un YLB Hit.
+
+0,05 * (10 ns + 120 ns) = 12,5 ns es el tiempo promedio que le lleva completar una operación cuando hay un TLB misss.
+
+Por lo tanto el tiempo promedio para completar una operación es de 123,5 ns + 12, 5 ns = 136 ns.
+
+---
+
+![Ejercicio 11](../VirtualizacionDeLaMemoria/imagenes/ej11mem.png)
+
+* **(a)**
+
+Sucede un TLB miss cuando $N < M$ ya que solo se ejecuta un ciclo del loop, que es cuando `i = 0`, al ser la primera vez que se accede al arreglo. Como tenemos paginas de 4 KB y los `ìnt` ocupan 4 bytes, se pueden almacenar 1024 `int` por pagina. Por lo que otro caso seria cuando $M <= N$ pero M es multiplo de 1024. Ejemplo, `M = j * 1024` con `j` un natural. Por lo tanto en cada iteración se accederia a otra pagina, generando un TLB miss.
+
+* **(b)**
+
+Si. Al tener 64 entradas, se puede llegar a dar el caso si es que `N < 1024 * 64`, de que esten cargadas en el TLB todos los elementos del arreglo. Por lo tanto todos serian TLB miss.
+
+---
+
+![Ejercicio 12](../VirtualizacionDeLaMemoria/imagenes/ej12mem.png)
+
+![Figure 1](../VirtualizacionDeLaMemoria/imagenes/figure1.png)
+
+* **(a)**
+
+Tenemos $2^{4}$ = 16 bits de virtual page number (VPN) y de $2^{12}$ (4096) bits del tamaño de pagina, hay $2^{4} * 2^{12} = 2^{16}$ (64 KB) bits de direccionamiento en cada espacio.
+
+* **(b)**
+
+    * **39424** = (1001 1010 0000 0000). Entonces VPN = (1001) = 9 que es valida y un offset = (1010 0000 0000) por lo que la PFN = **(0110 1010 0000 0000)**.
+
+    * **12416** = (0011 0000 1000 0000). Entonces VPN = (0011) = 3 que es valida y un offset = (0000 1000 0000) por lo que la PFB = **(0101 0000 1000 0000)**.
+
+    * **26112** = (0110 0110 0000 0000). Entonces VPN = (0110) = 0 que es valida y un offser = (0110 0000 0000) por lo que la PFB = **(0110 0110 0000 0000)**.
+
+    * **63008** = (1111 0110 0010 0000). Entonces VPN = (1111) = 15 que es valida y un offset = (0110 0010 0000) por lo que la PFN = **(0010 0110 0010 0000)**.
+
+    * **21760** = (0101 0101 0000 0000). Entonces VPN = (0101) = 5 que es valida y un offset = (0101 0000 0000) por lo que la PFN = **(0001 0101 0000 0000)**.
+
+    * **32512** = (0111 1111 0000 0000). Entonces VPN = (0111) = 7 No es direccion Valida. Por lo que no tiene direccion fisica xd.
+
+    * **43008** = (1010 1000 0000 0000). Entonces VPN = (1010) = 10 que es valida y un offset = (1000 0000 0000) por lo que la PFN = **(0100 1000 0000 0000)**.
+
+    * **36096** = (1000 1101 0000 0000). Entonces VPN = (1000) = 8 que es valida y un offset = (1101 0000 0000) por lo que la PFN = **(0011 1101 0000 0000)**.
+
+    * **7424** = (0001 1101 0000 0000). Entonces VPN = (0001) = 1 que es valida y un offset = (1101 0000 0000) por lo que la PFN = **(0111 1101 0000 0000)**.
+
+    * **4032** = (0000 1111 1100 0000). Entonces VPN = (0000) = 0 que es valida y un offset = (1111 1100 0000) por lo que la PFN = **(0000 1111 1100 0000)**.
+
+* **(c)**
+
+    * **16385** = (0100 0000 0000 0001). Entonces PFN = (0100) y offset = (0000 0000 0001) por lo que la VPN = 4 o 10 = (0100) o (1010). Entonces la direccion virtual es **(0100 0000 0000 0001)** o **(1010 0000 0000 0001)**.
+
+    * **4321** = (0001 0000 1110 0001). Entonces PFN = (0001) y offset = (0000 1110 0001) por lo que la VPN = 5 = (0101). Entonces la direccion virtual es **(0101 0000 1110 0001)**
+
+---
