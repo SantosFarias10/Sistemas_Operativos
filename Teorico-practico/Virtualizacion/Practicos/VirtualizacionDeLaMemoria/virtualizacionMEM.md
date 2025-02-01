@@ -191,3 +191,15 @@ Tenemos $2^{4}$ = 16 bits de virtual page number (VPN) y de $2^{12}$ (4096) bits
 * **0x00800B0B** = (0000 0000 1000 0000 0000 1011 0000 1011). Entonces PDI = 0x2, PTE = 0x0, offset = 0xBOB. PhysicalAddress = 0x{No tiene nada definido xd}B0B **(0x00000B0B)**.
 
 ---
+
+![Ejercicio 14](../VirtualizacionDeLaMemoria/imagenes/ej14mem.png)
+
+* **(a)** Tenemos un offset de $2^{12}$ = **4 KB**, que es el **tamaño de cada página**. Queremos mapear 32 MB = $2^{20} * 2^{5} = 2^{25}$. **Necesitamos** $\frac{2^{25}}{2^{12}} = 2^{13}$ = **8192 paginas**. **Por cada tabla** tenemos $2^{10}$ = **1024 paginas**. Entonces necesitamos $\frac{2^{13}}{2^{10}} = 2^{3} = 8$ **tablas**. Finalmente la PageDirectoryIndex + CantidadDeTablas * PageDirecoryEntry --> 4 KB + 8 * 4 KB = 36 KB es el tamaño total necesario para mapear 32 MB. Notar:
+    - Las direcciones virtuales tienen 32 bits (10 bits para el page directory, 10 bits para la page table y 12 bits del offset [10, 10, 12]), los 12 bits del offset indican las posiciones dentro de la página, los 12 bits pueden representar números desde el 0 hasta 4095, cubriendo 4096 posiciones en total, por lo que para sacar el **tamaño de las paginas** hay que elevar a 2 el offset ($2^{12} = 4$ KB). 
+    - Para sacar la **cantidad de paginas** requeridas hay que dividir la cantidad que queremos mapear ($2^{25} = 32$ MB) por el tamaño de cada pagina ($2^{12} = 4$ KB) ($\frac{2^{25}}{2^{12}} = 2^{13} = 8192$).
+    - Para sacar la **cantidad de page table** requeridas hay que dividir la cantidad total de paginas ($2^{13}$) por la capacidad de cada page table (como nos dice el enunciado cada page table puede contener 10 bits, $2^{10}$ = 1024 entradas) ($\frac{2^{13}}{2^{10}} = 2^{3}$ = 8 page table).
+    - Par sacar el tamaño total = Tamaño del directorio (10 bits, por lo que $1024 * 4 = 4$ KB) + Cantidad de page table (8) * tamaño de cada page table (4 KB) = 4 KB + 8 * 4 KB = 32 KB.
+    - Por lo tanto 32 KB es el tamaño necesario para mapear 32 MB.
+
+* **(b)** Queremos mapear 4 GB = $2^{30} * 2^{2} = 2^{32}$. Necesitamos $\frac{2^{32}}{2^{12}} = 2^{20}$ = 1048576 páginas. Entonces necesitamos $\frac{2^{20}{2^{10}}} = 2^{10}$ = 1024 tablas. Finalmente 4 KB + 1024 * 4 KB = 4100 KB es el tamaño necesario para mapear 4 GB.
+
