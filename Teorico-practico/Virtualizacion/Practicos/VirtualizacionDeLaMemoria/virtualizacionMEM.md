@@ -156,7 +156,7 @@ Tenemos $2^{4}$ = 16 bits de virtual page number (VPN) y de $2^{12}$ (4096) bits
 
     * **12416** = (0011 0000 1000 0000). Entonces VPN = (0011) = 3 que es valida y un offset = (0000 1000 0000) por lo que la PFB = **(0101 0000 1000 0000)**.
 
-    * **26112** = (0110 0110 0000 0000). Entonces VPN = (0110) = 0 que es valida y un offser = (0110 0000 0000) por lo que la PFB = **(0110 0110 0000 0000)**.
+    * **26112** = (0110 0110 0000 0000). Entonces VPN = (0110) = 0 que es valida y un offset = (0110 0000 0000) por lo que la PFB = **(0110 0110 0000 0000)**.
 
     * **63008** = (1111 0110 0010 0000). Entonces VPN = (1111) = 15 que es valida y un offset = (0110 0010 0000) por lo que la PFN = **(0010 0110 0010 0000)**.
 
@@ -203,3 +203,89 @@ Tenemos $2^{4}$ = 16 bits de virtual page number (VPN) y de $2^{12}$ (4096) bits
 
 * **(b)** Queremos mapear 4 GB = $2^{30} * 2^{2} = 2^{32}$. Necesitamos $\frac{2^{32}}{2^{12}} = 2^{20}$ = 1048576 páginas. Entonces necesitamos $\frac{2^{20}{2^{10}}} = 2^{10}$ = 1024 tablas. Finalmente 4 KB + 1024 * 4 KB = 4100 KB es el tamaño necesario para mapear 4 GB.
 
+* **(c)** De ser una tabla de un solo nivel, ocuparia 1024 * 4 KB = 4096 KB, por lo que ocuparia menos espacio je.
+
+* **(d)** IDK
+
+---
+
+![Ejercicio 15](../VirtualizacionDeLaMemoria/imagenes/ej15mem.png)
+
+En i386 tenemos $2^{32}$ = 4 GB de direccionamiento virtual de max. Y como parte de esos 4 GB esta reservado para el SO, no se puede mapear exactamente todos los 4 GB completos de memoria virtual. El máximo espacio de direcciones accesible para un proceso es de 2 GB en una configuración estándar. El espacio del kernel ocupa la mitad superior del rango.
+
+---
+
+![Ejercicio 16](../VirtualizacionDeLaMemoria/imagenes/ej16mem.png)
+
+$2^{36}$ = 64 GB, usando un esquema (4, 10, 10, 12) que serian 4 bits que apuntan a 16 page directory, este tendria 1024 tablas, y que cada tabla tendria 1024 paginas de $2^{12}$ = 4 KB por el offset de 12 bits.
+
+---
+
+![Ejercicio 17 primera parte](../VirtualizacionDeLaMemoria/imagenes/ej17amem.png)
+![Ejercicio 17 segunda parte](../VirtualizacionDeLaMemoria/imagenes/ej17bmem.png)
+
+* **(a)** **Verdadero**. Cada proceso tiene su page table para su virtual address.
+
+* **(b)** **Falso**. Se puede dar el caso donde la memoria virtual = memoria física, ya que VM >= PF.
+
+* **(c)** **Falso**. De haber un TLB miss se busca en la page table, la entrega la MMU.
+
+* **(d)** **Verdadero**. Se pueden mapear dos o mas direcciones físicas a una misma dirección virtual
+
+* **(e)** **Faslo**. Se puede mapear pero generaria problemas al intentar obtener la dirección.
+
+* **(f)** **Verdadero**. Por la memoria virtual se tiene $2^{32}$ que en realidad no son reales.
+
+* **(g)** **Verdadero**. Esto gracias a mecanismos como la paginación.
+
+* **(h)** **Falso**. La idea de usar memoria virtual es en parte evitar que este toda mapeada a la memoria física.
+
+* **(i)** **Falso**. Cada proceso tiene su propio PD, PTE, etc. Cada proceso tiene su propia memoria virtual.
+
+* **(j)** **Verdadero**. Puede no estar mapeada.
+
+* **(k)** **Falso**. Por tecnicas como copy-on-wfrite no se copia toda la memoria.
+
+* **(l)** **Verdadero**. Existen formas de acceder sin pasar por la MMU.
+
+* **(m)** **Falso?Verdadero?**
+
+* **(n)** **Verdadero**. De ser un SO extremadamente pequeño casi que se considere una libreria.
+
+---
+
+![Ejercicio 18](../VirtualizacionDeLaMemoria/imagenes/ej18mem.png)
+
+* **(a)** 0xFFC00000 = (1111 1111 1100 0000 0000 0000 0000 0000), por lo que PDI = 0x3FF = 1023, PTF = 0x0 y offset = 0x0. Entonces la dirección física es la base de la page table, la dirección 0x00000000.
+
+* **(b)** 0xFFFE0000 = (1111 1111 1111 1110 0000 0000 0000 0000), Por lo que PDI = 0x3FF = 1023, PTE = 0x3E0 y el offset 0x0. Entonces la dirección física es la que apunta la dirección virtual 0x3E0 concatenada con 0x0 del offset.
+
+* **(c)** 0xFFFFF000 = (1111 1111 1111 1111 1111 0000 0000 0000), por lo que PDI = 0x3FF, PTE = 0x3FF y offset = 0x0. Entonces la dirección física es  la ultima entrada del page directory.
+
+* **(d)** Este esquema de memoria virtual donde la ultima entrada apunta a la base del page directory, sirve para tener una tabla recursiva.
+
+---
+
+![Ejercicio 19](../VirtualizacionDeLaMemoria/imagenes/ej19mem.png)
+
+* **(a)** El puntero a NULL apunta a la dirección virtual 0 que no esta mapeada a memoria física, por lo que al intentar acceder se genera una excepción.
+
+* **(b)** El SO mapea paginas no usadas en memoria física a un archivo de swap, esto libera memoria física.
+
+* **(c)** Esto es cuando las paginas de un programa no se cargan en memoria física hasta que el programa intenet acceder a ellas.
+
+* **(d)** El SO puede mapear paginas adicionales para el stack si una operación desborda el tamaño actual, lo que hace crecer el segmento.
+
+* **(e)** Se prohibe la ejecucion de codigo desde el stack para evitar desbordamiento de buffer.
+
+* **(f)** Permite mapear archivos directeamente al espacio de direcciones virtuales.
+
+* **(g)** Los procesos padre e hijo comparten paginas, si uno intenta modificar una pagina se crea una copia privada de esa pagina especifica.
+
+* **(h)** El SO reserva grandes bloques de memoria fisica solo cuando es necesario.
+
+* **(i)** El SO optimiza calloc mapeando paginas inicializadas con ceros.
+
+* **(j)** Librerias compartidas entre procesos pueden ser mapeadas en memoria fisica y accedidas desde multiples memorias virtuales de diferentes procesos.
+
+* **(k)** Se pueden mapear paginas fisicas a diferentes direcciones virtuales de diferentes procesos para permitir comunicación.
