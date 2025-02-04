@@ -374,5 +374,42 @@ int FetchAndAdd(int *ptr) {
 }
 ```
 
-incrementa atómicamente un valor mientras devuelve el valor anteriori en una dirección particular.
+incrementa atómicamente un valor mientras devuelve el valor anterior en una dirección particular.
 
+* **lock con turno**, en lugar de un valor unico, esta solución combina un boleto y una variable de turno para construir un lock. Cuando un hilo desea adquirir un lock.
+
+```c
+typedef struct __lock_t {
+    int ticket;
+    int turn;
+} lock_t;
+
+void lock_init(lock_t *lock) {
+    lock->ticket = 0;
+    lock->turn = 0;
+}
+
+void lock(lock_t *lock) {
+    int myturn = FetchAndAdd(&lock->ticket);
+    while (lock->turn != myturn)
+    ; // spin
+}
+
+void unlock(lock_t *lock) {
+    lock->turn = lock->turn + 1;
+}
+```
+
+* **`park()`**, pone un hilo a dormir y **`unpark()`** despierta un hilo en particular.
+
+* **Herencia de prioridad**, es una tecnica que resuelve el problema de la inversión de prioridad, donde los locks con espera ocupada causan el problema, se puede evitar el uso de esto locks, un hilo de mayor prioridad que espera un hilo de menor prioridad puede aumentar temporalmente la prioridad del hilo inferioir, lo que le permite ejecutarse y superar la inversión.
+
+* **`setpark()`**, al llamar esta rutina, un hilo puede indicar que está a punto de estacionar (llamar a `park()`). Si luego se interrumpe y otro subproceso llama a `unpark()` antes de que se llame a `park()`, el siguiente `park()` regresa inmediatamente en lugar de dormir.
+
+* **`futex_wair(address, expected)`**, pone el hilo que hizo la llamada a dormir, asumiendo que el valor en `address` es igual a `expected`. Si no es igual, la llamada retorna inmediatamente.
+
+* **`futex_wake(address)`**, despierta un hilo que esta esperando en la cola.
+
+* **Lock de dos fases**, se da cuenta de que la espera ocupada puede ser útil, especialmente si el lock está a punto de liberarse. Entonces, en la primera fase, la cerradura itera por un tiempo, esperando que pueda adquirir el lock. Si el lock no se adquiere en la primera fase de espera ocupada, se ingresa a una segunda fase, donde se pone a dormir el hilo que hizo la llamada, y solo se despierta cuando el lock se libera más tarde.
+
+---
