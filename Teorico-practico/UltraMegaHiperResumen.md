@@ -263,7 +263,7 @@
 
     - `*attr`, es usado para especificar cualquier atributo que deba tener el hilo. (por ejemplo, setear el tamaño del stack o quizas información sobre la prioridad de planifiacación del hilo).
 
-    - `*(*start_routine)(void*)`, pide que función deberia empezar a ejecutar el hilo. Esto lo llamamos **Puntero a una función**, yesto nos dice que se espera un nombre de una función (`start_routine`), al cual se le pasa un solo argumento de tipo `void *`, y cual retorna un valor de tipo `void *`.
+    - `*(*start_routine)(void*)`, pide que función deberia empezar a ejecutar el hilo. Esto lo llamamos **Puntero a una función**, y esto nos dice que se espera un nombre de una función (`start_routine`), al cual se le pasa un solo argumento de tipo `void *`, y cual retorna un valor de tipo `void *`.
 
     - `arg`, es exactamente el argumento para ser pasado donde el hilo comienza la ejecución.
 
@@ -413,3 +413,14 @@ void unlock(lock_t *lock) {
 * **Lock de dos fases**, se da cuenta de que la espera ocupada puede ser útil, especialmente si el lock está a punto de liberarse. Entonces, en la primera fase, la cerradura itera por un tiempo, esperando que pueda adquirir el lock. Si el lock no se adquiere en la primera fase de espera ocupada, se ingresa a una segunda fase, donde se pone a dormir el hilo que hizo la llamada, y solo se despierta cuando el lock se libera más tarde.
 
 ---
+
+* **Variable de condición** es una cola explícita en la que los hilos pueden colocarse cuando algún estado de ejecución (osea, alguna **condición**) no es como se desea (**esperando** en la condición); alguún otro hilo, al cambiar dicho estado, puede depertar a uno (o mas) de esos hilos que están esperando, permitiendoles continuar (mediante una **señal** en la condición).
+
+* Para declarar una variable de condiciones, se escribe algo como `pthread_cond_t c`
+
+* La variable de condiciones tiene dos operaciones asociadas: `wait()`, se ejecuta cuando un hilo desea ponerse en estado de espera (sleep) y `signal()` se ejecuta cuando un hilo ha cambiado algo en el programa y quiere despertar a un hilo durmiente esperando sobre esta condición (`pthread_cond_wait(pthread_cond_t *c, pthread_mutex_t *m)` y `pthread_cond_signal(pthread_cond_t *c)`).
+
+* **Condición de cobertura**, es un problema que surge cuando una señal o evento antes de que un hilo se haya preparado para esperarlo. Esto resulta en que el hilo no detecte el evento porque ya ha pasado.
+
+---
+
