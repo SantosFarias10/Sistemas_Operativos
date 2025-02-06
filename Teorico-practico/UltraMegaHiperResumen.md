@@ -463,3 +463,33 @@ sem_init(&s, 0, 1);
 * Si todos los hilos entran en la región de memoria intensiva al mismo tiempo, la suma de todas las solicitudes de asignacion de memoria superara la cantidad de memoria fisica de la maquina. Como resultado, la maquina empezara a hacer **Thrashing** (osea, a intercambiar paginas hacia y desde el disco), y todo el calculo se arrastra.
 
 ---
+
+* **Deadlock**, son situaciones donde dos o mas procesos/hilos quedan bloqueados de forma indefinida porque cada uno está esperando a que otro libere un recurso que necesita para continuar.
+
+* **Violacion de segmento**. La serializabilidad deseada entre múltiples accesos a memoria se viola (osea, una region de codigo esta destinada a ser atomica, pero la atomicidad no se aplica durante la ejecución). Solución: simplemente añadimos lock alrededor de las referencia a la variable compartida.
+
+* **Errores de Violacion de orden**. El orden deseado entre dos (grupos de) accesos a memoria se invierte (osea, `A` siempre deberia ejecutarse antes que `B`, pero el oden no se aplica durante la ejecución). Solución: enforzar el orden.
+
+* **Deadlock**, ocurre, por ejemplo, cuando un hilo (Hilo 1) mantiene un lock (L1) y espera por otro (L2); lamentablemente, el hilo (Hilo 2) que mantiene el lock L2 esta esperando que L1 sea liberado.
+
+* Cuatro condiciones deben cumplirse para que ocurra un deadlock:
+
+    - **Explusion mutua**: Los hilos reclaman control exclusivo sobre los recursos que necesitan (por ejemplo, un hilo adquiere un lock).
+
+    - **Retener y esperar**: Los hilos mantienen los recursos que se les han asignado (por ejemplo, locks que ya han adquierido) mientras esperan recursos adicionales (por ejemplo, locks que desean adquirir).
+
+    - **Falta de apropiación**: Los recursos (por ejemplo, locks) no pueden ser retirados por la fuerza de los hilos que los están reteniendo.
+
+    - **Espera circular**: Existe una cadena circular de gilos tal que cada hilo retiene uno o mas recursos (por ejemplo, locks) que estan siendo solicitados por el siguiente hilo en la cadena.
+
+* La técnica de **prevención** más práctica (y ciertamente una de las más empleadas) es escribir el código de bloqueo de manera que nunca se induzca una espera circular. La forma más directa de lograrlo es establecer un **orden total** en la adquisición de locks.
+
+* El requisito de **retener y esperar** para que ocurra un deadlock puede evitarse adquiriendo todos los locks de forma atómica.
+
+* **`pthread_mutex_trylock()`** intenta adquierir el lock (si está disponible) y devuelve exito; de lo contrario, devuelve un codigo de error indicando que el lock ya esta en uso.
+
+* **Livelock**, es un problema en sistemas concurrentes que ocurre cuando dos o más procesos o hilos están activamente cambiando de estado en respuesta al estado del otro, pero ninguno logra progresar en su tarea. A diferencia de un deadlock, donde los procesos están bloqueados y no hacen nada, en un livelock los procesos siguen ejecutándose pero sin llegar a una solución.
+
+* La técnica final de prevención sería evitar por completo la necesidad de exclusión mutua. La idea detrás de estos enfoques sin locks (y los relacionados enfoques sin espera) es simple: utilizando instrucciones avanzadas del hardware, es posible construir estructuras de datos de una manera que no requiera bloqueos explícitos.
+
+* En lugar de prevenir el deadlock, en algunos escenarios es preferible **evitarlo**. La evitación requiere un conocimiento global de los locks que varios hilos podrían adquirir durante su ejecución, para luego planificar dichos hilos de una manera que garantice que no se pueda producir un deadlock.
