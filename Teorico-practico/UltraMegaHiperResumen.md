@@ -364,7 +364,7 @@ int StoreConditional(int *ptr, int value) {
 
 solo tiene exito (y actualiza el valor almacenado en la dirección desde la que se acaba de realizar el load-linked) si no se ha relizado ningun Almacenamiento intermedio en la dirección. En caso de exito devuelve 1 y actualiza el valor en `ptr` para `value`, el valor en `ptr` no es actualizado y retorna 0.
 
-* `**Fetch-and-Add(int *ptr)`** 
+* **`Fetch-and-Add(int *ptr)`**
 
 ```c
 int FetchAndAdd(int *ptr) {
