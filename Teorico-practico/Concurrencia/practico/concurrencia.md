@@ -187,7 +187,7 @@ P1: t=0; c1=true;
 ```
 
 No podrian ser los otros dos casos:
-
+    
 ```
 P0: c0=true; t=1;
 P1: t=0; c1=true;
@@ -200,3 +200,279 @@ P1: c1=true; t=0;
 
 ## Variables de condición
 
+![Ejercicio 9](../practico/imagenes/ej9con.png)
+
+![Codigo](../practico/imagenes/codigo9con.png)
+
+teniendo un productor P1 y dos consumidores C1 y C2. Supongamos que se ejecuta:
+
+* C1: 17, 18, 19, 20, 21, 22 (Frenando a esperar que se llene el buffer, context switch a P1)
+
+* P1: 5, 6, 7, 8, 9, 11, 12, 13, 7, 8, 9, 10 (Freanando a esperar que se vacie el buffer, avisa que esta lleno, context switch a C2)
+
+* C2: 23 (Se despierta por la señal de que esta lleno el buffer, pero al llegar a 23, esta vacio y explota).
+
+---
+
+## Semaforos
+
+![Ejercicio 10](../practico/imagenes/ej10con.png)
+
+* **(a)**
+
+```
+sem s1, s2, s3;
+
+sem_init(s1, 0);
+sem_init(s2, 0);
+sem_init(s3, 0);
+
+A; {sem_up(s1)}
+B; {sem_down(s1), sem_up(s2)}
+C; {sem_down(s2), sem_up(s3)}
+D; {sem_down(s3)}
+```
+
+* **(b)**
+
+```
+sem s1, s2;
+
+sem_init(s1, 0);
+sem_init(s2, 0);
+
+A; {sem_up(s1)}
+B; {sem_down(s1)}
+C; {sem_up(s2)}
+D; {sem_down[s2]}
+```
+
+* **(c)**
+
+```
+sem s1, s2, s3;
+
+sem_init(s1, 0);
+sem_init(s2, 0);
+sem_init(s3, 0);
+
+A; {sem_up(s1), sem_up(s2)}
+B; {sem_down(s1), sem_up(s3)}
+C; {sem_down(s2), sem_up(s3)}
+D; {sem_down(s3), sem_down(s3)}
+```
+
+* **(d)**
+
+```
+sem s;
+
+sem_init(s,0);
+
+A; {sem_up(s)}
+B; {sem_up(s)}
+C; {sem_up(s)}
+D; {sem_down(s), sem_down(s), sem_down(s)}
+```
+
+---
+
+![Ejercicio 11](../practico/imagenes/ej11con.png)
+
+* **(a)**
+
+```
+sem s1, s2, mutex;
+
+sem_init(s1, 0);
+sem_init(s2, 0);
+sem_init(mutex, 1);
+
+---
+
+P0:
+sem_up(s2);
+sem_down(mutex);
+
+a0 = x;
+
+sem_down(s1);
+sem_down(s1);
+
+a0 = a0 + 1;
+x = a0;
+
+sem_up(mutex);
+
+---
+
+P1:
+sem_down(s2);
+sem_down(mutex);
+
+x = x + 1;
+x = x + 1;
+
+sem_up(mutex);
+sem_up(s1);
+
+---
+
+P2: 
+sem_down(mutex);
+
+a2 = x;
+a2 = a2 + 1;
+
+sem_down(s2);
+
+x = a2;
+
+sem_up(mutex);
+sem_up(s1);
+```
+
+* **(b)**
+
+```
+sem s0, s1;
+
+sem_init(s0,1);
+sem_init(s1,0);
+
+---
+
+P0: 
+while (n<100) {
+    sem_down(s0);
+    n = n * 2;
+    m = n;
+
+    sem_up(s1);
+}
+
+---
+
+P1:
+while (n<100) {
+    sem_down(s1);
+    n = n + 1;
+    m = n;
+    sem_up(s0);
+}
+```
+
+Los valores finales de n = 100 y m = 100.
+
+---
+
+![Ejercicio 12](../practico/imagenes/ej12con.png)
+
+* Caso (E,F) = (0,0)
+
+Al estar inicializados los dos semaforos en cero, se llega a un deadlock. Porque supongamos que primer va hacia ping(), al llegar al sem_wait(empty) se duerme el proceso porque el semaforo paso a ser -1, se sigue con pong() donde al llegar a sem_wait(full) sucede lo mismo, pasa a ser -1 y se duerme el proceso. Asi quedando pendiente los procesos de que el otro termine, pero estando los dos dormidos.
+
+* Caso (E,F) = (0,1)
+
+En este caso se escribe Pong seguido de Ping seguido de Pong y de Ping, sucesivamente, el semaforo funciona pero no se muestra Ping Pong, sino Pong Ping. Supongamos que accede primero a ping(), al llegar a sem_wait(empty), se duerme el proceso. Y sigue con pong(), al llegar a sem_wait(full), este decrece a cero por lo que entra a la zona critica, escribiendo Pong, incrementa sem_up(empty) por lo que se libera el proceso en Ping(), escribiendo Ping, y habilitando que se escriba Pong nuevamente y asi hasta completar el numero de loops.
+
+* Caso (E,F) = (1,0)
+
+En este caso se escribe Ping seguido de Pong, el semaforo funciona bien y se muestra en pantalla Ping Pong. Hace la misma logica que el caso anterior pero "invertido".
+
+* Caso (EF) = (1,1)
+
+En este caso se rompe la concurrencia, ya que se ejecutan en cualquier orden, llegandose a ver Ping Ping Pong Pong ó permutaciones de ese estilo. Inclusive sobreposiciones de las palabras como PinPongg.
+
+---
+
+![Ejercicio 13](../practico/imagenes/ej13con.png)
+
+Implementa la version de semaphores del libro ostep, llamada zemaphores. La diferencia con los semaphores, es que se usa un solo lock y una sola variable condicional mas una variable de estado para trakear el valor del semaphore. Tambien se diferencia en que no mantiene la invariante de que el valor del semaphore, cuando es negativa, no reflecta el numero de threads esperando, sino que el valor nunca sera menor a cero.
+
+---
+
+## Deadlock
+
+![Ejercicio 14](../practico/imagenes/ej14con.png)
+
+* **(a)**
+
+```
+P0: lock(printer)
+P1: {se duerme en el lock(printer)}
+P2: lock(cd)
+P0: lock(disk)
+P2: {se duerme en el lock(printer)}
+```
+
+* **(b)**	
+
+```
+sem printer, disk, cd;
+sem_init(printer,1);
+sem_init(disk,1);
+sem_init(cd,1);
+
+---
+
+P0: 
+sem_down(printer);
+sem_down(disk);
+sem_up(disk);
+sem_up(printer);
+
+---
+
+P1:
+sem_down(printer);
+sem_up(printer);
+sem_down(cd);
+sem_down(disk);
+sem_up(disk);
+sem_up(cd);
+
+---
+
+P2:
+sem_down(cd);
+sem_up(cd);
+sem_down(printer);
+sem_down(disk);
+sem_down(cd);
+sem_up(cd);
+sem_up(disk);
+sem_up(printer);
+```
+
+* **(c)**
+
+```
+P0: Queda igual
+
+---
+
+P1:
+sem_down(printer)
+sem_up(printer)
+sem_down(disk)
+sem_down(cd)
+sem_up(cd)
+sem_up(disk)
+
+---
+
+P2:
+sem_down(printer)
+sem_down(disk)
+sem_down(cd)
+sem_up(cd)
+sem_up(disk)
+sem_up(printer)
+```
+
+---
+
+![Ejercicio 15](../practico/imagenes/ej15con.png)
+
+Bajo este contexto puede haber deadlock, ya que al matar un proceso no se vuelve a aumentar el semaforo. Pero supongamos que si se mata un proceso se aumenta el semaforo, entonces bajo esta condicion en algun momento se mataria el proceso que causa el deadlock, destrabando todo.
