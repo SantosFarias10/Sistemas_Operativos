@@ -493,3 +493,121 @@ sem_init(&s, 0, 1);
 * La técnica final de prevención sería evitar por completo la necesidad de exclusión mutua. La idea detrás de estos enfoques sin locks (y los relacionados enfoques sin espera) es simple: utilizando instrucciones avanzadas del hardware, es posible construir estructuras de datos de una manera que no requiera bloqueos explícitos.
 
 * En lugar de prevenir el deadlock, en algunos escenarios es preferible **evitarlo**. La evitación requiere un conocimiento global de los locks que varios hilos podrían adquirir durante su ejecución, para luego planificar dichos hilos de una manera que garantice que no se pueda producir un deadlock.
+
+---
+
+* Los componentes que exigen un alto rendimiento (como la tarjeta gráfica) están más cerca de la CPU. Los componentes de menor rendimiento están más lejos.
+
+* En un **dispositivo canonico** Tiene dos componentes importantes:
+
+    - **Interfaz de hardware** que se presenta al resto del sistema, el hardware presenta algún tipo de interfaz que permita al software del sistema controlar su funcionamiento.
+
+    - **Estructura interna**. Responsable de implementar la abstracción que el dispositivo presenta al sistema. Los dispositivos muy simples tendrán uno o varios chips de hardware para implementar su funcionalidad; los dispositivos más complejos incluirán una CPU simple, algo de memoria de propósito general y otros chips específicos del dispositivo para hacer su trabajo.
+
+* La interfaz se compone de tres **registros**:
+
+    - **Estado**, se puede leer para ver el estado actual del dispositivo.
+
+    - **Comando**, para decirle al dispositivo que realice una determinada tarea.
+
+    - **Datos**, para pasar datos al dispositivo u obtener datos del dispositivo.
+
+* Interracción tipica:
+
+    1. El SO espera hasta que el dispositivo esté listo para recibir un comando leyendo repetidamente el registro de estado (**Polling**, osea simplemente le pregunta que esta pasando).
+
+    2. El SO envía algunos datos al registro de datos. Cuando la CPU principal está involucrada con el movimiento de datos, nos referimos a ella como **I/O programado** (**PIO**) o **entrada/salida programada**.
+
+    3. El SO escribe un comando en el registro de comandos; la hacerlo, implícitamente le hace saber al dispositivo que los datos estan presentes y que debe comenzar a trabajar en el comando.
+
+    4. El SO espera a que el dispositivo termine haciendo polling en un bucle, esperando para ver si está terminado (y luego puede obtener un código de error para indicar éxito o fracaso).
+
+* Para mejorar la interacción: la **Interrupción**. En lugar de hacer polling al dispositivo repetidamente, el SO puede emitir una solicitud, poner el proceso de llamada en suspensión y cambiar de contexto a otra tarea. Cuando el dispositivo finalmente termina con la operación, generará una interrupción de hardware, lo que hará que la CPU salte al SO a una rutina predeterminada de servicio a la interrupción (interrupt service routine: **ISR**) o simplemente un manejador de interrupciones. Que es solo una parte del código del SO que finalizará la solicitud y activará el proceso que esperaba el I/O, que luego puede continuar como se desee.
+
+* Si un dispositivo es rápido, puede ser mejor hacer polling; si es lento, las interrupciones, que permiten superposición, son mejores. Si no se conoce la velocidad del dispositivo, o si a veces es rápida y a veces lenta, puede ser mejor utilizar un híbrido que hace polling por un tiempo y luego, si el dispositivo aún no termina, usa interrupciones.
+
+* **Fusionar**, un dispositivo que necesita generar una interrupción primero espera un poco antes de entregar la interrupción a la CPU. Mientras espera, otras solicitudes pueden completarse pronto y, por lo tanto, múltiples interrupciones pueden fusionarse en una sola entrega de interrupciones, lo que reduce la sobrecarga del procesamiento de interrupciones.
+
+* **Direct Memory Access** (**DMA**) o **Acceso Directo a Memoria**, dispositivo muy específico dentro de un sistema que puede orquestar transferencias entre dispositivos y la memoria principal sin mucha intervención de la CPU. Para transferir datos al dispositivo, el SO (por ejemplo) programa el motor DMA indicandole donde se encuentra los datos en la memoria, cuantos datos copiar y a que dispositivo enviarlos.
+
+* Metodos principales de comunicación con los dispositivos:
+
+    1. (el mas antiguo) es tener instrucciones de I/O explícitas. Estas instrucciones especifican una forma para que el SO envíe datos a registros específicos de dispositivos y así permitir la construcción de los protocolos descritos anteriormente. Estas instrucciones suelen ser privilegiadas. El SO controla los dispositivos, por lo que es el único al que se le permite comunicarse directamente con ellos.
+
+    2. **Memory mapped I/O** o **I/O mapaeado en memoria**, el hardware hace que los registros de dispositivos estén disponibles como si fueran ubicaciones de memoria. Para acceder a un registro en particular, el SO emite una lectura (load) o escritura (store)  en la dirección; el hardware luego enruta la llamada a load/store al dispositivo en lugar de a la memoria principal.
+
+---
+
+* La interfaz básica para todos los discos; consta de un gran numero de sectores (bloques de 512 byes) cada uno de los cuales puede ser leído o escrito.
+
+* Los sectores están numerados del `0` al `n-1` en un disco de `n` sectores.
+
+* Es posible realizar operaciones que abarcan múltiples sectores; varios sistemas de archivos leerán o escribirán 4 KB a la vez (o mas). Pero, al actualizar el disco, los fabricantes garantizan únicamente que una escritura de 512 bytes será **Atómica** (osea, o se completará en su totalidad o no se completará en absoluto), si ocurre una interrupción repentina de energía, solo una parte de una escritura mayor podría completarse (esto se lo llama **Rotura de escritura**).
+
+* **Plato**, superficie circular rígida en la que se almacena información de forma persistente mediante cambios magnéticos. En un disco se puede tener uno o mas platos; cada plato tiene dos caras, conocidas como **Superficies**.Los platos suelen estar hechos de un material resistente (como el aluminio) y recubiertos con una fina capa magnética que permite almacenar bits de forma persistente incluso cuando el disco está apagado.
+
+* Todos los platos están unidos alrededor del **eje**, el cual está conectado a un motor que hace girar los platos (mientras el disco esta encendido) a una velocidad constante. Esta velocidad de rotación generalmente se mide en **Rotaciones por minuto** (**RPM**). Importante destacar que a menudo nos interesa el tiempo de una única rotacion. Por ejemplo, un disco que gira a 10.000 RPM completa una rotación en aproximadamente 6 ms.
+
+* La información se codifica en cada superficie en círculos concéntricos de sectores; a uno de estos círculos concéntricos se lo denomina **Pista**.
+
+* Para leer y escribir en la superficie; se necesita un mecanismo que permita detectar (leer) los patronos magnéticos del disco o inducir cambios en ellos (escribir). Este proceso de lectura y escritura se realiza mediante el **Cabezal del disco**; hay 1 por cada superficie del disco. La cabeza esta conectada a un **Brazo del disco**, que se mueve a lo largo de la superficie para posicionar el cabezal sobre la pista deseada.
+
+* **Retraso rotacional**, tiempo que toma para que el sector del disco deseado pase por debajo del cabezal de lectura/escritura durante el giro del disco. Si el retraso rotacional completo es `R`, el disco dene incurrir en un retraso rotacional de aproximadamente $\frac{R}{2}$.
+
+* **Busqueda**, proceso mediante el cual el cabezal de lectura/escritura se mueve físicamente para posicionarse sobre la pista del plato que contiene el sector deseado. Las busquedas, junto a las rotaciones, son una de las operaciones más costosas en los discos.
+
+* La busqueda tiene varias fases:
+
+    1. Una fase de **aceleración** cuando el brazo del sico empieza a moverse.
+
+    2. Una fase de **Deslizamiente** a medida que el brazo se mueve a toda velocidad.
+
+    3. Una dase de **Desaceleración** mientras el brazo se frena.
+
+    4. Una fase de **Estabilización** donde el cabezal se posiciona cuidadosamente sobre la pista correcta.
+
+* **Transferencia**, fase final de I/O, donde los datos se leen o escriben en la superficie.
+
+* **Track skew** o **Sesgo de pista**, se aseguran de que las lecturas secuenciales puedan ser atendidas correctamente, incluso cuando cruzan los límites de las pistas.
+
+* **Zonas Múltiples**, donde el disco está organizado en múltiples zonas y una zona es un conjunto consecutivo de pistas en una superficie.
+
+* **Memoria cache** o a veces se llamado **Buffer de pista**. Es una pequeña cantidad de memoria (normalmente alrededor de 8 o 16 MG) que el disco puede usar para almacenar datos leídos o escritos en él.
+
+* **Write-back caching** o **Caché de retroescritura** o aveces **Informes inmediatos**, a veces hace que el disco parezca "mas rapido", pero puede ser peligrosa; si el sistema de un archivo o las aplicaciones requieren que los datos escriban en disco en un cierto orden para garantizar la correctitud, la caché de retroescritura puede causar problemas.
+
+* ¿**Write-through**?
+
+* **Tiempo de rotación**
+
+$$
+T_{Rotacion} = \frac{Tiempo (ms)}{1 Rotación}
+$$
+
+* Notar que 1 minuto son 60 segundos, 1 segundo son 1000, por lo que 1 minuto son 60000 ms.
+
+* **Tiempo de I/O** es la suma de tres componentes principales.
+
+$$
+T_{I/O} = T_{Busqueda} + T_{Rotacion} + T_{Transferencia}
+$$
+
+* Notar que la tasa o ratio de  I/O ($R_{I/O}$), que a menudos se utiliza para comparar unidades de disco, se calcula a partir del tiempo. Simplemente dividimos el tamaño de la transferencia entre el tiempo que tomó:
+
+$$
+R_{I/O} = \frac{Tamaño_{Transferencia}}{T_{I/O}}
+$$
+
+* Tipos de Carga de trabajo:
+
+    - Carga de trabajo **Aleatoria**, realiza lecturas pequeñas (por ejemplo 4 KB) en ubicaciones aleatorias del disco. Son comunes en muchas aplicaciones importantes.
+
+    - Carga de trabajo **Secuencial**, simplemente lee un gran número de sectores consecutivamente del disco, sin saltos entre ellos.
+
+* **Tiempo de transferencia** es el tamaño de la transferencia dividido por la tasa máxima de transferencia (velocidad).
+
+* Notar que 1000 microsegundos tiene 1000 milisegudos.
+
+* Para calcular la **Tasa de I/O** dividimos el tamaño de la transferencia por el tiempo promedio, obteniendo asi un $R_{I/O}$.
+
+* 
