@@ -610,4 +610,83 @@ $$
 
 * Para calcular la **Tasa de I/O** dividimos el tamaño de la transferencia por el tiempo promedio, obteniendo asi un $R_{I/O}$.
 
-* 
+* **Planificador de disco**, examina estas solicitudes y decide cuál planificar a continuación. Podemos hacer una buena estimación de cuánto tomará un "trabajo" (osea, una solicitud de disco). Puede calcular cuántos tiempo tomará cada solicitud y selecicionar (de manera voraz) la que requiera el menor tiempo de atención primero. Intenta seguir el principio de **SJF** en su operación.
+
+* **Shortest Seek Time First** (**SSJF**) o **Tiempo de Búsqueda Más Corto Primero**, tambien llamado **Shortest-Seek-First** (**SSF**) o **Búsqueda Más Corta Primero. Organiza la cola de solicitudes de I/O por pista, seleccionando primero las solicitudes en la pista más cercana.
+
+* El SO puede implementar simplemente **Nearest-Block-First** (**Bloque Más Cercano Primero**) **NBF**, programa la solicitud con la dirección de bloque más cercana.
+
+* **SCAN**, simplemente se mueve de un lado a orto del disco atendiendo solicitudes en orden a través de las pistas. SCAN tiene algunas variantes, las cuales todas realizan algo similar:
+
+    - **F-SCAN**, congela la cola que se está atendiendo durante un barrido; esta acción coloca las solicitudes que llegan durante el barrido en una cola para ser atendidas mas tarde. Hacer esto evita la inanición de solicitudes lejanas al retrasar la atención de las solicitudes que llegan tarde (pero que están más cerca).
+
+    - **C-SCAN**, en lugar de barrer en ambas direcciones a través del disco, el algoritmo solo reliza barridos de las pistas exteriores a las interiores, luego se reinicia en la pista exterior para comenzar de nuevo. Esto resulta un poco más justo para las pistas exteriores e interiores, ya que un SCAN puro de ida y vuelta favorece las pistas intermedias; es decir, después de atender la pista exterior, SCAN pasa por las pistas intermedias dos veces antes de volver a la pista exterior.
+
+* **Shortest Positioning Time First** (**SPTF**) o **Tiempo de Posicionamiento Más Corto Primero**, a veces tambien llamada **Shortest Access Time First** (**SATF**) o **Tiempo de Acceso Más Corto Primero**, selecciona la proxima solicitud en funcion del **Tiempo total de posicionamiento mas corto**, el cual incluye tanto el **Tiempo de búsqueda** (mover el cabezal al cilindro correco) como el **tiempo de rotación** (esperar que el sector adecuado pase bajo el cabezal).
+
+---
+
+* Un dispositivo de **Almacenamiento persistente**, como un clásico **Disco duro** (HDD) o un dispositivo de **Almacenamiento de estado sólido** (SSD) más moderno, almacena información de manera permanente (o al menos, por un largo período).
+
+* **Archivo**, es simplemente un arreglo lineal de bytes, cada uno de los cuales se puede leer o escribir.
+
+* Cada archivo tiene algún tipo de **Nombre de bajo nivel**, usualmente un número; a menudo, el usuario no es consciente de este nombre.
+
+* El nombre de bajo nivel de un archivo suele denominarse su **Número de inodo** (**i-número**).
+
+* **Directorio**, al igual que un archivo, también tiene un nombre de bajo nivel (osea, un número de inodo), pero su contenido es muy específico: contiene una lista de pares (nombre legible por el usuario, nombre de bajo nivel). Al colocar directorios dentro de otros directorios, los usuarios pueden construir un ***arbol de direcorios** arbitrario (o **Jerarquía de directorios**), bajo el cual se almacena todos los archivos y directorios.
+
+* La Jerarquía de directorios comienza en un **Directorio raíz** y utiliza algun tipo de **separador** para nombrar **Subdirectorios** hasta que se alcanza el archivo o directorio deseado.
+
+* **Creación de archivos**. Esto se logra utilizando la llamada al sistema `open`; al llamar a `open()` y pasarle la flag `O_CREAT`, un programa puede crear un archivo nuevo.
+
+* Una caracteristica importante de `open()` es lo que retorna: un **Descriptor de archivo**, es solo un entero provado por proceso, que se usa en UNIX para acceder a los archivos. Actúa como una **Capacidad**, osea, un identificador opaco que concede poder para realizar ciertas operaciones.
+
+* **strace**, registra todas las llamadas al sistema realizadas por un programa mientras se ejecuta y muestra el resultado por pantalla.
+
+* **leer o escribir archivos de manera secuencial**, osea, leyendo un archivo desde el principio hasta el final o escribiendolo en ese mismo orden.
+
+* Para acceder a ubicaciones **Aleatorias** dentro del archivo para buscar una palabra especifica usamos la syscal: `lseek(int fildes, off_t offset, int whence)`.
+
+    1. El primer argumento es un descriptor de archivo.
+
+    2. El segundo  argumento es el offset o desplazamiento, que posiciona el **desplazamiento del archivo** a una ubicación particular del mismo.
+
+    3. El tercer argumento determina exactamente como se realiza la búsqueda.
+
+        - Si `whence` es `SEEK_SET`, el desplazamiento se establece en
+  offset bytes.
+
+        - Si `whence` es `SEEK_CUR`, el desplazamiento se establece en su
+  posición actual más offset bytes.
+
+        - Si `whence` es `SEEK_END`, el desplazamiento se establece en el
+  tamaño del archivo más offset bytes.
+
+* **Tabla de archivos abiertos**, estructura de datos que representa todos los archivos abiertos actualmente en el sistema.
+
+* Caso interesante de compartir entradas ocurre con la llamada al sistema `dup()`, permite que un proceso cree un nuevo descriptor de archivo que se refiere al mismo archivo abierto subyacente que un descriptor exigente.
+
+* Cuando un proceso llama a `fsync(int fd)` para un descriptor de archivo en particular, el sistema de archivos responde forzando todos los datos **Sucios** (osea, aún no escritos) al disco para el archivo referido por el descriptor especificado. `fsync()` devuelve el control una vez que toas estas escrituras se han completado.
+
+* La syscall `rename(char *old, char *new)` toma exactamente dos argumentos: el nombre original del archivo (*old) y el nuevo nombre (*new).
+
+* **Metadatos**. información sobre cada archivo.
+
+* Para ver los metadatos de un archivo determinado, utilizamos `stat()` o `fstat()`. Toman ruta de acceso (o un descriptor de archivo) y completan unaa estructura `stat`.
+
+* `unlink()` solo toma el nombre del archivo que se desea eliminar y devuelve cero si tiene éxito.
+
+* `mkdir()` se utiliza para crear directorios.
+
+* `ls`, se utiliza para leer un direcotorio.
+
+* `rmdir()` se usa para eliminar un directorio.
+
+* `link()` crea un enlace a un archivo existente, toma dos arguntos: Una ruta de archivo existente y una nueva. Crea otro nombre en el directorio al que estás enlazando, y lo asocio al mismo número de inodo (osea, el nombre de bajo nivel) del archivo original.
+
+* **Contador de referencias** o **Contador de enlaces** permite al sistema de archivos rastrear cuántos nombres de archivo diferentes están vinculados a ese inodo en particular.
+
+* **Enlace simbólico** o **Enlace blando**, es un archivo especial que actua como un puntero o referencia a otro archivo o directorio en un sistema de archivos.
+
+# Terminar xd
