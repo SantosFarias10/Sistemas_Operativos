@@ -2,33 +2,63 @@
 
 ---
 
-* **Proceso** es un programa en ejecución. Lo constituye lo que llamamos **Machine state** o **Máquina de estado**, donde se encuentra la **Memoria**, la memoria que el proceso puede acceder llamada **address spaces** o **Espacio de direcciones**. Los **Registros**, algunos importantes como por ejemplo el PC (Program Counter) que nos dice que instrucción es la siguiente en ejecutar, del programa el **Stack Pointer**, se usa para manejar la pila de los parametros de funciones, variables locales, return address. También tienen la información I/O.
+## Virtualizacion
+
+### Capitulo 4
+
+* **Proceso** es un programa en ejecución. Lo constituye lo que llamamos **Machine state** o **Máquina de estado**, donde se encuentra la **Memoria**, la memoria que el proceso puede acceder llamada **address spaces** o **Espacio de direcciones**. Los **Registros**, algunos importantes como por ejemplo el PC (*Program Counter*) que nos dice que instrucción es la siguiente en ejecutar, del programa el **Stack Pointer**, se usa para manejar la pila de los parametros de funciones, variables locales, return address. También tienen la información I/O.
+
+* Lo que debe incluirse en cualquier interfaz de un SO, Estas APIs, estan disponibles en cualquier SO:
+
+    - **Crear**: Metodo para crear nuevos procesos.
+
+    - **Destruir**: Metodo para destruir un proceso / Forzar la detencion de un proceso.
+
+    - **Esperar**: Metodo para esperar un proceso.
+
+    - **Controles varios**: Por ejemplo: Metodo para suspender un proceso por un tiempo y, detener su ejecucion y despues continuar ejecutandolo.
+
+    - **Estado**: Metodo para obtener informacion de estado de un proceso.
 
 * Los proceso pueden estar en diferentes **Estados**:
 
+    - **Running** es el estado con el control de la CPU.
+
+    - **Ready** son los procesos en espera para usar la CPU.
+
+    - **Blocked** puede ser cuando un proceso espera una interacción con algun I/O.
+
 ![Figure 4.2](../Teorico-practico/imagenes/Figure4_2.png)
 
-**Running** es el estado con el control de la CPU.
+* Cuando queremos ejecutar mas de un proceso a la vez. El SO crea una ilusion **Virtualizando** la CPU. Esto lo logra ejecutando un proceso, luego deteniendolo y ejecutando otro, y asi sucesivamente, el SO puede crear la ilusion de que existen muchas CPUs virtuales cuando en realidad hay solo una CPU fisica. Esta tecnica es conocida como **Tiempo Compartido** de la CPU, permite a los usuarios ejecutar tantos procesos concurrentes como deseen.
 
-**Ready** son los procesos en espera para usar la CPU.
+* Para implementar la virtualizacion de la CPU, el SO necesitara maquinaria de bajo nivale a la que llamaremos **Mecanismo**; son metodos o protocolos de bajo nivel que implementan una parte de la funcionalidad necesaria. Por ejemplo: context switch.
 
-**Blocked** puede ser cuando un proceso espera una interacción con algun I/O.
+* Encima de estos mecanismos reside parte de la inteligencia del SO, en forma de **Politicas**. Son algoritmos para tomar algun tipo de decision dentro del SO. Por ejemplo: las politicas de planificacion.
+
+* La contrapartida del tiempo compartido es el **Espacio Compartido**, donde un recurso se divide (en el espacio) entre aquellos que deseen utilizarlo.
+
+---
+
+### Capitulo 5
+
+* **System Call**:
+
+    - `fork()` es una **system call** usada para crear un proceso nuevo. Este proceso nuevo es una copia casi exacta del proceso que lo llamó ("El padre"). El proceso nuevo ("El hijo"), no empieza en el main del padre, si no que empieza a partir de donde se llamo `fork()` en el padre. El padre recive de `fork()` el **PID** del hijo, a el hijo recive de `fork()` un cero. `fork()` imprime $2^{n}$ con `printf("a")` n cantidadedes de `fork()`.
+
+    - `wait()` es la función que utiliza un proceso padre para esperar a que su proceso hijo termine de ejecutarse, "entra en modo zombie". Una vez termina de ejecutarse y vuelve `wait()`, se termina de ejecutar el padre.
+
+    - `exec(const char *path, char *const argv[])` se usa para que un proceso hijo se diferencie, o ejecute un programa diferente al del padre. Simplemente toma el nombre de un ejecutable y algunos argumentos, carga su código de ese ejecutable y sobreescribe el código correspondiente al segmento del hijo. Este NO crea un proceso nuevo, solo lo transforma. Una llamada correcta de `exec()` nunca vuelve.
+
+    - `execvp(const char *file, char *const argv[])` diferencia con el exec??.
+
+    - `kill()` se usa para mandar *signals* a un proceso, incluyendo directivas para pausar, matar y otros imperativos utiles.
+
+    - `signal()` se usa en un proceso para "agarrar" varias signals.
 
 ---
 
-* `fork()` es una system call usada para crear un proceso nuevo. Este proceso nuevo es una copia casi exacta del proceso que lo llamó ("El padre"). El proceso nuevo ("El hijo"), no empieza en el main del padre, si no que empieza a partir de donde se llamo `fork()` en el padre. El padre recive de `fork()` el **PID** del hijo, a el hijo recive de `fork()` un cero. `fork()` imprime $2^{n}$ con `printf("a")` n cantidadedes de `fork()`.
-
-* `wait()` es la función que utiliza un proceso padre para esperar a que su proceso hijo termine de ejecutarse, "entra en modo zombie". Una vez termina de ejecutarse y vuelve `wait()`, se termina de ejecutar el padre.
-
-* `exec()` se usa para que un proceso hijo se diferencie, o ejecute un programa diferente al del padre. Simplemente toma el nombre de un ejecutable y algunos argumentos, carga su código de ese ejecutable y sobreescribe el código correspondiente al segmento del hijo. Este NO crea un proceso nuevo, solo lo transforma. Una llamada correcta de `exec()` nunca vuelve.
-
-* `kill()` se usa para mandar signals a un proceso, incluyendo directivas para pausar, matar y otros imperativos utiles.
-
-* `signal()` se usa en un proceso para "agarrar" varias signals.
-
-* Todas las funciones mencionadas son system call.
-
----
+### Capitulo 6
 
 * **Limited Direct Execution** o **Ejecución Directa Limitada**, la parte de "Direct Execution" se refiere a ejecutar sea cual sea el programa directamente en la CPU. La parte de "Limited" se refiere a NO dejar que cualquier proceso se apodere de la CPU indefinidamente o que realicen una instrucción ilegal.
 
