@@ -12,11 +12,11 @@ La interaccion entre el SO y los usuarios se da mediante una interfaz **API** (u
 
 Como muchos programas corren concurrentemente, el SO tambien se encarga de ser el **Administrador** de los **Recursos**, entregando el uso del hardware real a los programas de forma eficiente y siguiendo diferentes **Mecanismos** y **Politicas**.
 
-##### Virtualizacion de la CPU
+#### Virtualizacion de la CPU
 
 El SO crea la ilusion de que hay muchos CPUs disponibles para que muchos programas puedan correr en simultaneo. La ejecucion de estos es manejada por diferentes **Mecanismos** y **Politicas** establecidas por el SO.
 
-##### Virtualizacion de la Memoria
+#### Virtualizacion de la Memoria
 
 La **Memoria Fisica** no es mas que un `array` de bytes, y para poder leer o escribir en ella se necesita especificar una Direccion** en donde hacerlo.
 
@@ -26,11 +26,11 @@ Al ser **Virtualizada**, cada programa tiene su propio **Espacio Direccionable**
 
 Los accesos a memoria de un programa no afectan (o no deberian xd, por proteccion) a otros programas o al SO mismo (eso es, aislamiento de procesos).
 
-##### Concurrencia
+#### Concurrencia
 
 Los problemas de concurrencia surgen con la ejecucion de programas en simultaneo (compartiendo memoria y CPU) o por programas que usan **Multiples Hilos**. Requiere de la ejecucion **Atomica** de instruccioness (toda la ejecucion de una sola vez, sin interferencias) para evitar comportamientos indefinidos y problemas de seguridad. Con el fin de evitar esas **Race Condition** (o posibles **Deadlocks**), se utilizan **Locks**, **Semaforos**.
 
-##### Persistencia
+#### Persistencia
 
 La informacion en RAM es **Volatil** (su contenido se pierde al interrumpir el suministro de electricidad), por lo que el SO debe encargarse de la persistencia de la informacion. Lo hace a traves de hardware (con dispositivos de **I/O**, como discos) y el software (**Sistema de Archivos**).
 
@@ -44,11 +44,11 @@ Un **Proceso** es la abstraccion del SO de un programa en ejecucion; el programa
 
 La tecnica de ir intercalando varios procesos concurrentes, ejecutando uno a la vez, es conocida como **Time Sharing** (Tiempo Compartido), consiste en dividir un recurso (en el espacio) entre proceos que deseen utilizarlo.
 
-##### Virtualizacion
+#### Virtualizacion
 
 Para lograr la ilusion de que hay muchas CPU (y, a su vez, que los procesos no tengan el control directo de lo que se ejecuta en la CPU fisica), el SO usa **Mecanismos** de bajo nivel; protocolos para implementar distintas funcionalidades. Algunas de ellas son el **Context Switch** (cambios de contextos), que permite cambiar un proceso en ejecucion por otro, y las diferentes **Politicas** de los **Planificadores**: algoritmos que toman decisiones sobre la distribucion de los recursos limitados en base a distintos factores y prioridades.
 
-##### Procesos
+#### Procesos
 
 Un proceso puede ser descrito (y por lo tanto guardado) por su **Estado**:
 
@@ -58,7 +58,7 @@ Un proceso puede ser descrito (y por lo tanto guardado) por su **Estado**:
 
 3. **Almacenamiento**: Un proceso puede acceder al almacenamiento (dispositivos I/O) para asegurar la persistencia.
 
-##### API de los Procesos
+#### API de los Procesos
 
 Cualquier interfaz de procesos de un SO debe poder:
 
@@ -74,13 +74,13 @@ Cualquier interfaz de procesos de un SO debe poder:
 
 Los programas utilizan estas funciones mediante **System Calls** proporcionadas por la API.
 
-##### Creacion de un Proceso
+#### Creacion de un Proceso
 
 Para correr un programa (osea convertirlo en proceso) el SO debe **Cargar** su codigo y su informacion estatica (con un formato ejecutable) del disco a la memoria, en el Address Space del proceso.
 
 Se deben proporcionar memoria **Stack** (variables locales, parametros de llamada, direcciones de retorno, etc)y **Heap** (informacion dinamica y variables en tamaño, estructura de datos como listas; todo lo relacionado con `malloc`y `free`) para el programa. En el Stack, ademas, el SO establece los parametros `argv` (arreglos de cadenas (de tipo `char *`) que contiene los argumenos como `strings`) y `argc count` (entero que indica **Cuantos** argumentos se pasaron al programa desde la linea de comandos. Siempre es al menos 1, ya que se incluye el nombre del programa).
 
-##### Estado de un Proceso
+#### Estado de un Proceso
 
 Cada proceso esta en alguno (solo uno) de los siguientes estados:
 
@@ -96,7 +96,7 @@ El paso entre los distintos estados esta dado por eventos del software o hardwar
 
 A lo sumo puede haber `n` procesos en estado de Running, siendo `n` = cantidad de cores (nucleos).
 
-##### Estructura de datos del SO
+#### Estructura de datos del SO
 
 Listas de procesos (**Process List**): Contiene el listado de los procesos listos para correr o corriendo.
 
@@ -110,7 +110,7 @@ Esta informacion sobre los procesos del sistema nos permite realizar un **Contex
 
 * **Wall Time**: Tiempo total real transcurrido, desde que comienza a ejecutarse un proceso hasta que termina.
 
-##### Notar
+#### Notar
 
 * &WallTime >= CPU Time$: Cuando el proceso se ejecuta en un solo nucleo o en multiples nucleos pero sin paralelismo (un nucleo alternado entre varios hilos).
 
