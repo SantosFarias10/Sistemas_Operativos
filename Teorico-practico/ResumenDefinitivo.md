@@ -112,7 +112,7 @@ Esta informacion sobre los procesos del sistema nos permite realizar un **Contex
 
 #### Notar
 
-* &WallTime >= CPU Time$: Cuando el proceso se ejecuta en un solo nucleo o en multiples nucleos pero sin paralelismo (un nucleo alternado entre varios hilos).
+* $WallTime >= CPU Time$: Cuando el proceso se ejecuta en un solo nucleo o en multiples nucleos pero sin paralelismo (un nucleo alternado entre varios hilos).
 
 * $WallTime < CPU Time$: Puede llegar a suceder si el proceso se ejecuta en multiples nucleos simultaneamente (paralelismo), ya que el CPU time se suma en cada nucleo que esta en uso.
 
@@ -251,5 +251,83 @@ Para que no ocurran *interrupts* simultaneas, se suelen deshabilitar las interru
 #### Resumen
 
 En LDE se ejecuta **Directamente** al programa en el CPU, habiendo configurado antes al hardware para poder **Limitar** lo que cada proceso puede ejecutar, y habiendo el SO preparado a la CPU configurando al momento del boot al controlador de **Traps** y al **Timer** de interrupciones, y luego ejecutando procesos solo en **Modo** restringido.
+
+---
+
+### Capitulo 7: Planificacion de la CPU
+
+Las politicas de alto nivel (**Scheduling Policies**, o **Disciplines**) son algoritmos utilizados el *scheduler* del SO para decidir que procesos ejecutar y en que orden.
+
+#### Presunciones Sobre la Carga de Trabajo
+
+Antes de ver como se desarrolla una politica, hacemos algunas suposiciones sobre los procesos que corren en el sistema (la carga de trabajo, o *workload*), las cuales no son realistas:
+
+1. Todos duran lo mismo hasta acabar.
+
+2. Todos llegan al mismo tiempo.
+
+3. Una vez empiezan, se ejecutan hasta acabar.
+
+4. Solo usan CPU (no I/O).
+
+5. Sabemos de antemano el tiempo que toma su ejecucion.
+
+#### Metricas de la Planificacion
+
+El **Turnaround Time** (*T_{turnaround}*) es la metrica que mide el tiempo total que tarda un proceso desde que llega al sistema hasta que finaliza:
+
+$$
+T_{turnaround} = T_{completion} - T_{arrival}
+$$
+
+(Tiempo de entrega = Tiempo de finalizacion - Tiempo de llegada).
+
+Si se cumple la suposicion (2), $T_{arrival} = 0$, lo que hace $T_{turnaround} = T_{completion}$
+
+$T_{turnaround}$ es una metrica de **Performance** (rendimiento). $T_{response}$ es una metrica **Fairness** (que tan justo es), que se suele contrastar con la de Performance.
+
+#### Politica: **FIFO** (*First In, First Out*) (tambien llamado *FCFS*: *First Come First Serve*):
+    
+Es simple y facil de implementar pero con mal $T_{turnaround}$. Puede sufrir de **Convoy Effect**, es decir, puede llegar antes un proceso mas largo que los demas y relentizar al resto, teniendo a procesos mas cortos en espera, ya que cada proceso corre hasta finalizar , aumentando asi el tiempo promedio de entrega del sistema.
+
+#### Politica: *Shortest Job First* (*SJF*):
+
+Siempre corre el proceso **Mas Corto** primero, minimizando asi el $T_{turnaround}$ promedio.
+
+Si llega primero un proceso largo sera ejecutado, y si luego llega uno mas corto debera esperar a que finalice el primero, empeorando el $T_{turnaround}$ (se genera el mismo **Convoy Effect**).
+
+#### Politica: *Shortest Time-to-Completion First* (*STCF*) (llamado *PSJF*: *Preemptive Shortest Job First*):
+
+Los procesos no corren hasta acabar. El *scheduler* puede hacer **Preempt** de un trabajo (darle prioridad) y realizar un context switch en los momentos en los que el SO retoma el control del CPU (interrupts, Syscalls, etc). Tiene mal *Response Time*.
+
+#### Metrica: *Response Time*
+
+Las computadoras actuales deben tener una Performance interactiva con el usuario, y esto se mide en *Response Time*:
+
+$$
+T_{response} = T_{firstRun} - T_{arrival}
+$$
+
+Tiempo de respuesta: Tiempo desde que el proceso llega hasta que es ejecutado por primera vez; Primeroa ejecucion - Momento de llegada.
+
+#### Politica: *Round Robin* (*RR*)
+
+Corre los procesos durante un periodo de tiempo fijo o hasta que acaben (este segmento, **Time Slice**, es llamado **Quantum**). Al ser cortado por un Q, el proceso va al final de una FIFO. Cambia de proceso cada cierto tiempo fijo de entre los trabajos que hay en una cola hasta que finalicen. Este *Time Slice* debe ser **Multiplo** del **Timer** interrupt del sistema para que el SO pueda tomar control y hacer el context switch en ese momento.
+
+La duracion del time slice es importante; si es muy corta es bueno para el $T_{response}$ pero puede empeorar la Performance al aumentar la cantidad de context switchs. A la vez, debe ser suficientemente larga para amortizar el costo del cambio y no empeorar la Performance, y corta como para mantener un $T_{response}$ aceptable.
+
+RR es **Fair** (justa), lo que hace que sea mala en su tiempo de entrega. Es un *Tradeo-off* a considerar dependiendo del objetivo que se tenga con el scheduler.
+
+Ante dos procesos que arriban a la vez se debe establecer una politica que determine cual se ejecuta, pero si uno ya estaba *ready* antes que otro, se respeta el orden FIFO, no el de la politica.
+
+#### Incorporando I/O
+
+Todos los programas que usan I/O no usan la CPU mientras realizan ese trabajo, ya que esperan a que este se complete (quedando el proceso en estado *Blocked*). Durante este tiempo, el *scheduler* puede correr otro proceso. Cuando el I/O termina, el *Scheduler* tambien decide que hacer; si lo deja en espera (*Ready*) o si lo ejecuta nuevamente (*Running*, con un context switch).
+
+De esta forma, se utiliza con mas eficiencia el CPU, suponiendo cortos periodos de uso del CPU y el I/O a la vez entre programas, tratando cada pequeño tiempo de uso del CPU como proceso y maximizar el uso de los recursos.
+
+#### NO mas Oraculo
+
+Si olviamos la suposicion (5), normalmente no se sabe la longitud de un proceso. Sin esto *SJF* y *STCF* no funcionan bien.
 
 ---
