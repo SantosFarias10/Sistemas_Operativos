@@ -331,3 +331,53 @@ De esta forma, se utiliza con mas eficiencia el CPU, suponiendo cortos periodos 
 Si olviamos la suposicion (5), normalmente no se sabe la longitud de un proceso. Sin esto *SJF* y *STCF* no funcionan bien.
 
 ---
+
+### Capitulo 8: Cola Multinivel con Retroalimentacion (*MLFQ*)
+
+#### Politica: *MLFQ* (*Multi-Level Feedback Queue*):
+
+Busca optimizar tanto el *turnaround time* como el *response time*, osea, tener a la vez buena Performance y ser interactivo, brindando una respuesta adaptativa a la carga.
+
+#### Reglas Basicas
+
+*MLFQ* cuenta con diferentes colas (*queues*) con un diferente nivel de prioridad cada una. Los procesos en estado *Ready* quedan posicionados en ellas y el *MLFQ* decide correr en base a la prioridad de cada proceso. Esta prioridad varia en base al **Comportamiento Observado** anteriormente; Si el mismo normalmente suelta el CPU para esperar un I/O (proceso *I/O-bound*), el *MLFQ* mantiene su prioridad alta viendolo como un proceso interactivo. En cambio, frente a usos prolongados del CPU (proceso *CPU-bound*), el MLFQ le baja prioridad.
+
+La MLFQ trata de aprender del Comportamiento de los procesos para predecir el **Futuro Comportamiento**. O sea, la **Prioridad Cambia** con el tiempo.
+
+Ademas, periodicamente (cada un tiempo S) se aumenta la prioridad de todos los procesos (**Priority Boost**) Poniendolos en la cola de mayor prioridad. Esto garantiza que los procesos no se queden sin CPU time (evita **Starvation** si se ejecutan demasiados procesos interactivos), que si un **Long-Running Job** se vuelve **Interactivo** el scheduler lo trate como tal (en vez de quedarse en las colas de baja prioridad), y que los procesos no puedan **Jugar** con el **Scheduler** (liberando el CPU justo antes de terminar su *Time Slice* para mantenerse en prioridad alta y monopolizar su uso).
+
+La duracion de S debe ser bien elegida para que no haya starvation (si es muy largo) y que los procesos interactivos funcionen eficientemente (no muy corto). Por otra parte, para prevenir que un proceso juegue con el scheduler para evitar bajar de cola de prioridad, se le da a cada proceso un tiempo total (dependiendo de la cola; time slice mas cortos a mayor prioridad) que no debe sobrepasar, independientemente de si fue un uso de los CPU interrumpido o si hubo context switch en el medio.
+
+Las decisiones sobre la cantidad de colas, la duracion de los slices, el quantum de cada cola, o cada cuanto hacer el boost, depende de los objetivos del planificador, y varian de un SO a otro. Son decisiones fundamentales, y suelen ser llamadas **Constantes Vudu**. En algunos SO, se permite al usuario establecer sugerencias sobre la prioridad de algunos programas.
+
+#### En Resumen
+
+Las reglas de la *MLFQ* consisten en:
+
+1. Si $Prioridad(A) > Prioridad(B)$, se ejecuta **A** (B no).
+
+2. Si $Prioridad(A) = Prioridad(B)$, se ejecuta A y B en **RR**.
+
+3. Cuando un trabajo ingresa al sistema, se coloca en la cola de **Prioridad mas alta**.
+
+4. Una vez que un trabajo utilice su **Tiempo** asignado en un nivel dado (independientemente de cuantas veces haya renunciado a la CPU), su **Prioridad se reduce**.
+
+5. Despues de un periodo de tiempo determinado (**S**), todos los trabajos del sistema se mueven a la **Cola de mas Alta Prioridad*.
+
+#### Las Politicas de Planificacion Vistas Son:
+
+* **FIFO**: *First In First Out*, (starvation, trade off turnaround).
+
+* **SJF**: *Shortest Job First*, (starvation, trade off turnaround).
+
+* **STCF**: *Shortest Time to Completion First*
+
+* **RR**: *Round Robin*, (quantum, response).
+
+* **MLFQ**: *Multi-Level Feedback Queue*, (quantum, response).
+
+---
+
+## Virtualizacion de Memoria
+
+
