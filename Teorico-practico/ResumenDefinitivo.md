@@ -533,3 +533,74 @@ Usando las herramientas proporcionadas por el hardware, el SO logra la virtualiz
 3. **Definicion de los Exception Handler (manejo de excepciones)** en el momento de booteo, para luego ser ejecutado en caso de accesos a memoria ilegal (errores **Out Of Bounds**; fuera de rango) o intentos de uso de instrucciones privilegiadas.
 
 ---
+
+### Capitulo 17: Gestion de Espacio Libre
+
+El manejo del espacio libre resulta sencillo cuando el espacio esta dividido en unidades de espacios constantes; si se solicita espacio solo entregar la primera entrada libre (**Paginacion**). Pero se vuelve dificil con bloques de espacio libre de diferentes tamaño.
+
+#### Suposiciones
+
+Contamos con una interfaz para administrar la memoria que provee las funciones `malloc(size_of)` y `free()`, tal y como las describimos anteriormente. Estas libreria meneja la memoria heap, y la estructura generica que maneja el free space es la **free list**, la cual contiene una referencia a todos los bloques de espacio libre en la region que maneja la memoria. Esta abstraccion se usa tanto en espacio de usuario como en espacio de kernel.
+
+Una vez se llama a `malloc()` con memoria dentro del heap, esta no puede ser tocada por la libreria hasta que se use `free()`. Esto implica que hasta ese momento no es posible compactar el espacio libre (porque no podemos mover el bloque ya asignado). La compactacion puede ser usada por el SO para combatir la fragmentacion de usar segmentacion. Tambien asumimos que el allocator maneja una regios de bytes continua (osea, no va a crecer).
+
+#### Mecanismos de Bajo nivel: Division y Fusion (Splitting and Coalescing)
+
+Una free list contiene un conjunto de elementos que describen los espacios libres que quedan en la memoria heap. Consiste en una serie de listas ligadas con la direccion de los bloques, su longitud, y la direccion del siguiente espacio libre. Si se solicita un lugar mayor al disponible (puede que el espacio este desocupado pero no en un bloque continuo) el pedido falla.
+
+Los allocators cuentan con dos mecanismos usados para administrar el espacio libre:
+
+* **Splitting**: Cuando se solicita memoria, el allocator busca un bloque de memoria que satisfaga el pedido.Si el mismo tiene un tamaño **Mayor** al requerido, loo partira en dos y devolvera un puntero al primero (del tamaño justo necesario), manteniendo al segundo en la free list.
+
+* **Coalescing**: Consiste en combinar los bloques de espacio libre continuos en uno solo. Este procedimiento se realiza cuando se libera espacio.
+
+#### Seguimiento del Tamaño de las Regiones Asignadas
+
+Al llamar a `free()` no se especifica el tamaño de la region a liberar; la libreria es capaz de darse cuenta sola y recuperar la memoria. Para lograr esto, la mayoria de allocators guardan informacion en un **Header Block** al inicio de cada bloque de memoria asignado.
+
+El header contiene el **Tamaño** de memoria asignada a ese bloque. Ademas, puede contener **Punteros** para acelerar la recuperacion de memoria, un "numero magico" para verificar la **Integridad**, y otra informacion extra.
+
+Notar entonces que el tamaño del bloque de memoria, o sea el espacio a liberar, ahora puede saberse rapidamente y consiste del tamaño del espacio solicitado mas el tamaño de la estructura de su header *size* y *magic* (mismo al hacer `alloc`). Esto es, tamaño solicitado **+ 8 bytes**.
+
+#### Encastracion en una Lista de Espacios Libres
+
+La free list se ecuentra en un bloque dentro del espacio libre mismo. Cuando se solicita espacio, se asigna al comienzo de la free list (header + bloque). Cada vez que se recibe un nuevo pedido, es asignado al final del bloque anterior (siempre y cuando el espacio disponible sea el suficiente).
+
+Al liberarse un bloque, la celda "magic" pasa a ser un puntero "next" al siguiente chunk. De haber dos bloques contiguos que cumplen esa condicion, se los une y se modifica el puntero next.
+
+#### Aumentando el Tamaño del Heap
+
+los allocators suelen comenzar con una memoria heap pequeña e ir pidiendo mas espacio al SO a medida que lo necesitan. Este, si tiene exito, les devuelve la direccion del nuevo final del heap.
+
+#### Estrategias Basicas
+
+El allocator ideal es rapido, eficiente enn el uso del espacio (minimizando fragmentaciones) y escalable. No hay un unico enfoque mejor que el resto, pero existen varias **Politicas** de menejo de espacio libre que persiguen ese objetivo:
+
+1. **Best Fit**:
+
+    * Se busca a traves de la free list al bloque libre mas **Pequeño** de los espacios iguales o superiores al solicitado. Al hacer de una busqueda **Exhaustiva** en la free list, genera una penalizacion de Performance, y una fragmentacion en espacios libres pequeños.
+
+2. **Worst Fit**:
+
+    * Se busca al bloque mas **Grande** disponible, se usa el espacio necesario, y se devuelve lo restante a la free list. Genera los mismos **Overheads** al realizar tambien una busqueda **Exhaustiva** (fragmentando esta vez en bloques libres mas grandes).
+3. **First Fit**:
+
+    * Usa el **Primer** bloque de la lista lo suficientemente grande para cumplir con lo solicitado. Su ventaja es la **Velocidad** ya que evita realizar una busqueda Exhaustiva, pero "**Contamina**" el **comienzo** de ka free list al concentrar alli la fragmentacion en bloques pequeños.
+
+4. **Next Fit**:
+
+    * Igual a First Fit pero utiliza un puntero que le permite comenzar la busqueda desde la **Ultima Posicion** revisada la vez anterior. Desparrama la fragmentacion a lo largo de la free list y mantiene la **Velocidad** del enfoque anterior, pero requiere un puntero extra en la implementacion.
+
+5. **Listas Segregadas**:
+
+    * Ante apliciones que tengan peticiones **Recurrentes** de tamaño similar, se crea una nueva lista para el manejo de objetos de ese tipo, y se envian las demas peticiones al allocator general. La fragmentacion es menor y los pedidos de dicho tamaño se satisfacen mas rapido.
+
+    * Por ejemplo, el **Slab Allocator** asigna un numero de ***Object Caches** para objetos del kernel que se solicitan seguido. Si le falta espacio pide mas slabs (bloques pequeños) de memoria. Este allocator tambien mantiene los free objects de las listas en un estado pre inicializado.
+
+6. **Buddy Allocation**:
+
+    * Tanto la memoria libre como la memoria que se asigna son espacios de tamaño $$2^{N}$$. Cuando se solicita un **Bloque**, se divide el espacio libre por 2 hasta encontrar uno que satisfaga el pedido.
+
+    * Cuando un bloque se libera se chequea que su "buddy" del mismo tamaño este libre, y si lo esta los combina, y asi recursivamente hasta coalescing (Unir bloques de memoria libres contiguos en uno solo mas grande) de todo o encontrar un "buddy" en uso; simplificar el **Coalescing** pero genera **Fragmentacion Interna**.
+
+---
