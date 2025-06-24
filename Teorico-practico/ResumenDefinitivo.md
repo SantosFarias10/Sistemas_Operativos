@@ -274,7 +274,7 @@ Antes de ver como se desarrolla una politica, hacemos algunas suposiciones sobre
 
 #### Metricas de la Planificacion
 
-El **Turnaround Time** (*T_{turnaround}*) es la metrica que mide el tiempo total que tarda un proceso desde que llega al sistema hasta que finaliza:
+El **Turnaround Time** ($$*T_{turnaround}*$$) es la metrica que mide el tiempo total que tarda un proceso desde que llega al sistema hasta que finaliza:
 
 $$
 T_{turnaround} = T_{completion} - T_{arrival}
@@ -282,19 +282,19 @@ $$
 
 (Tiempo de entrega = Tiempo de finalizacion - Tiempo de llegada).
 
-Si se cumple la suposicion (2), $T_{arrival} = 0$, lo que hace $T_{turnaround} = T_{completion}$
+Si se cumple la suposicion (2), $$T_{arrival} = 0$$, lo que hace $$T_{turnaround} = T_{completion}$$
 
-$T_{turnaround}$ es una metrica de **Performance** (rendimiento). $T_{response}$ es una metrica **Fairness** (que tan justo es), que se suele contrastar con la de Performance.
+$$T_{turnaround}$$ es una metrica de **Performance** (rendimiento). $$T_{response}$$ es una metrica **Fairness** (que tan justo es), que se suele contrastar con la de Performance.
 
 #### Politica: **FIFO** (*First In, First Out*) (tambien llamado *FCFS*: *First Come First Serve*):
     
-Es simple y facil de implementar pero con mal $T_{turnaround}$. Puede sufrir de **Convoy Effect**, es decir, puede llegar antes un proceso mas largo que los demas y relentizar al resto, teniendo a procesos mas cortos en espera, ya que cada proceso corre hasta finalizar , aumentando asi el tiempo promedio de entrega del sistema.
+Es simple y facil de implementar pero con mal $$T_{turnaround}$$. Puede sufrir de **Convoy Effect**, es decir, puede llegar antes un proceso mas largo que los demas y relentizar al resto, teniendo a procesos mas cortos en espera, ya que cada proceso corre hasta finalizar , aumentando asi el tiempo promedio de entrega del sistema.
 
 #### Politica: *Shortest Job First* (*SJF*):
 
-Siempre corre el proceso **Mas Corto** primero, minimizando asi el $T_{turnaround}$ promedio.
+Siempre corre el proceso **Mas Corto** primero, minimizando asi el $$T_{turnaround}$$ promedio.
 
-Si llega primero un proceso largo sera ejecutado, y si luego llega uno mas corto debera esperar a que finalice el primero, empeorando el $T_{turnaround}$ (se genera el mismo **Convoy Effect**).
+Si llega primero un proceso largo sera ejecutado, y si luego llega uno mas corto debera esperar a que finalice el primero, empeorando el $$T_{turnaround}$$ (se genera el mismo **Convoy Effect**).
 
 #### Politica: *Shortest Time-to-Completion First* (*STCF*) (llamado *PSJF*: *Preemptive Shortest Job First*):
 
@@ -314,7 +314,7 @@ Tiempo de respuesta: Tiempo desde que el proceso llega hasta que es ejecutado po
 
 Corre los procesos durante un periodo de tiempo fijo o hasta que acaben (este segmento, **Time Slice**, es llamado **Quantum**). Al ser cortado por un Q, el proceso va al final de una FIFO. Cambia de proceso cada cierto tiempo fijo de entre los trabajos que hay en una cola hasta que finalicen. Este *Time Slice* debe ser **Multiplo** del **Timer** interrupt del sistema para que el SO pueda tomar control y hacer el context switch en ese momento.
 
-La duracion del time slice es importante; si es muy corta es bueno para el $T_{response}$ pero puede empeorar la Performance al aumentar la cantidad de context switchs. A la vez, debe ser suficientemente larga para amortizar el costo del cambio y no empeorar la Performance, y corta como para mantener un $T_{response}$ aceptable.
+La duracion del time slice es importante; si es muy corta es bueno para el $$T_{response}$$ pero puede empeorar la Performance al aumentar la cantidad de context switchs. A la vez, debe ser suficientemente larga para amortizar el costo del cambio y no empeorar la Performance, y corta como para mantener un $$T_{response}$$ aceptable.
 
 RR es **Fair** (justa), lo que hace que sea mala en su tiempo de entrega. Es un *Tradeo-off* a considerar dependiendo del objetivo que se tenga con el scheduler.
 
