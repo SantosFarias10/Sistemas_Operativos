@@ -654,3 +654,61 @@ La paginacion requiere que se realice una referencia a memoria extra para buscar
 Cuando corre, cada instruccion fetcheada genera dos referencias de memoria; una a la page table para encontrar el physical frame en la que la instruccion reside, y otra a la instruccion en si misma para poder fetchearla hacia la CPU.
 
 ---
+
+### Capitulo 19: Traducciones Mas Rapidas (TLB)
+
+La paginacion requiere un gran mapeo de informacion, el cual normalmente esta almacenado en memoria fisica, y la paginacion requiere una busqueda extra para cada direccion virtual generada por los procesos. Ir a memoria por la traduccion antes de cada instruccion hace perder al CPU demasiados ciclos de clock en espera.
+
+Para aumentar la velocidad de la traduccion de las direcciones, el SO se apoya en el hardware; usa una parte del chip MMU llamada **Translation-Lookaside Buffer** o **TLB**, el cual es un **Cache** de traduccion de direcciones virtuales a fisicas, y por esto lo llamamos **Address-Translation Cache**.
+
+Cada vez que hay una referencia a memoria, el hardware primero revisa la TLB para ver si la traduccion esta ahi y, de estarlo, la traduccion es realizada rapidamente sin necesidad de acceder a la Page Table y causar un cuello de botella en el pipeline del CPU.
+
+#### Algoritmo Basico de la TLB
+
+Supongamos una page table lineal y un TLB manejado por hardware. El algoritmo consiste en:
+
+1. Extraer el VPN de la virtual address y revisar si el TLB tiene la traduccion para este VPN.
+
+2. Si lo tiene (**TLB Hit**), obtiene el PFN de la TLB entry, lo concatena al offset de la direccion virtual original, y consigue la direccion fisica deseada para acceder a memoria (mientras que los chequeos de proteccion no fallen).
+
+3. Si es **TLB Miss**(no tiene la traduccion), el hardware accede a la page table para encontrar la traduccion y, asumiendo que la direccion virtual es valida y accesible, la suve a la TLB. La proxima vez que busque esa traduccion, va a ser TLB Hit y se ejecutara rapido.
+
+#### Localidad Espacial y Temporal
+
+Supongamos un array y un loop que lo recorre linealmente. Si en cada pagina de la page table tenemos varios elementos del array, el primero al que queramos acceder de la pagina va a ser un miss (por lo que el TLB va a tener que buscar la traduccion) pero luego hara hit como todos los elementos que esten en la misma pagina, mejorando drasticamente el desempeño en comparacion a tener que buscar la traduccion de la referencia virtual para cada uno de ellos.
+
+Esto se da porque, ante un TLB miss, se guarda **Toda la page** en la TLB, y no solo la direccion cuya traduccion fue requerida. Osea, la TLB (la memoria cache) se beneficia de la **Spatial Locality** (que los elementos estan cerca unos de otros) y, si el programa se vuelve a ejecutar rapidamente (por ejemplo: un loop) se beneficia de **Temporal Locality** (la rapida re-referenciacion a items en memoria en el tiempo) ya que todavia formaran parte de la TLB y volverian a ser hit.
+
+Claramente, ante mayor tamaño de las paginas o de la TLB, mayor porcentaje de TLB hit se genera y mayor se aprovechan estas localidades.
+
+#### Manejo del TLB Miss
+
+En sistemas antiguos CISC, los TLB miss eran manejos por hardware. En sistemas modernos **RISC** son manejos por el sofware, usando un **Software-Managed TLB**; en un miss el hardware solo levanta una excepcion que pausa el flujo de instrucciones, eleva el privilegio a modo kernel, salta al **Trap Handler** (un codigo dentro del SO), busca la traduccion en la page table, y actualiza la TLB con instrucciones privilegiadas, para luego volver de la trap y que el hardware re-ejecuta la ejecucion.
+
+El return from trap luego de un TLB miss debe volver a ejecutar la **Misma Ejecucion** que causo el miss para esta vez dar hit, a diferencia del return from trap normal que ejecuta la siguiente instruccion (el PC, *Program  Counter Register*, es diferente en cada caso).
+
+El SO debe tener cuidado de no causar un loop de TLB misses (si, por ejemplo, el trap handler se encuentra en una memoria virtual no cacheada en la TLB), y para esto tiene diversas estrategias que puede usar. Las principales ventajas de que el TLB miss sea manejado por software con su **Simplicidad** y **Flexibilidad**; se puede implementar cualquier estructura de datos que se necesite sin requerir un cambio en el hardware.
+
+#### Contenidos de la TLB
+
+Una TLB tipica tiene 32, 64 o 128 entradas y es **Fully Associative**, osea, el hardware buscara la traduccion en paralelo (rapidez constante) en todas las entradas. La TLB contiene **VPN | PFN | Other Bits**.
+
+Entre esos otros bits suelen incluirse un **Valid Bit** que indica si una entrada tiene una traduccion valida para esa direccion de memoria virtual o no, **Protection Bits R/W/X**, que determinan si se puede acceder a una pagina (read, write, execute), **Address Space Identifier**, **Dirty Bits** y otros.
+
+Notar que el TLB (PTE) valid bit es diferente al valid bit de la page table, el cual marcaba que una page table entry no ha sido asignada (allocated) por el proceso y no debe ser usada por ningun programa.
+
+#### Context Switches
+
+Las traducciones que hay en la TLB solo sirven para el proceso en ejecucion; al hacer un context switch dichas traducciones no debe ser usadas con el nuevo proceso.
+
+Un enfoque frente a este problema es borrar el contenido de la TLB (**Flush**), seteando todos los valid bit en 0. Sin embargo, ante cambios de contexto frecuentes, se genera un alto costo al tener que buscar las traducciones cada vez.
+
+Frente a esto, algunos sistemas se apoyan en el hardware al añadir un **Address Space Identifier** (**ASID**); un capo en la TLB que permite identificar a que proceso pertenecen las traducciones, pudiendo almacenar a la vez las de diferentes procesos.
+
+#### Politicas de Reemplazos
+
+Las memorias cache son veloces pero pequeñas. Si para insertar una nueva entrada en la TLB es necesario reemplazar una vieja, se debe elegir una politica para realizar ese **Cache Replacement**. La idea siempre es bajar el porcentaje de TLB miss; puede elegirse borrar la que mas tiempo lleva sin usarse (**LRU**: *Least Recently Used*) para tratar de mantener la localidad temporal, o simplemente borrar una **Aleatoria**, que no presenta casos borde como LRU (por ejemplo: ante un recorrido en loop de un array que no entre en la TLB).
+
+---
+
+Capitulo 20: Tablas de Paginacion Mas Pequeñas
