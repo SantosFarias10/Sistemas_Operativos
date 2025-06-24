@@ -604,3 +604,53 @@ El allocator ideal es rapido, eficiente enn el uso del espacio (minimizando frag
     * Cuando un bloque se libera se chequea que su "buddy" del mismo tamaño este libre, y si lo esta los combina, y asi recursivamente hasta coalescing (Unir bloques de memoria libres contiguos en uno solo mas grande) de todo o encontrar un "buddy" en uso; simplificar el **Coalescing** pero genera **Fragmentacion Interna**.
 
 ---
+
+### Capitulo 18: Introduccion a la Paginacion
+
+Si se corta el espacio disponible en bloques de tamaños diversos se genera fragmentacion, lo que complica la asignacion de espacio mientras mas espacio se ocupa.
+
+Un enfoque diferente consiste en cortar el espacio en partes iguales de un tamaño estandar. Esto en memoria virtual se llama **Paginacion** (**Paging**) y cada unidad es una **Pagina** (**Page**). A la memoria fisica se la ve como un array de slots iguales llamados **Marcos de Pagina** (**Page Frame**).
+
+#### Descripcion General
+
+La paginacion tiene varias ventajas comparado con los enfoques anteriores:
+
+* **Flexibilidad**: Es capaz de apoyar la abstraccion del address space eficientemente, mas alla de como el proceso use el address space (por ejemplo: no se asume la direccion de crecimiento del heap/stack o como son usados).
+
+* **Simplicidad**: Permite manejar el espacio libre (la free list) tan solo otorgando la cantidad de paginas necesarias (y evitando fragmentacion externa).
+
+Para mantener un registro de donde cada pagina virtual del address space esta situada en memoria fisica, el SO guarda la informacion de cada proceso en una estructura conocida como **Page Table** (Tabla de Paginas), la cual almacena las **Adress Translation** de cada pagina virtual.
+
+Para que el hardware y el SO traduzca una direccion virtual debemos dividir en 2 componentes la direccion: El **Virtual Page Number** (**VPN**, numero de pagina virtual) y el **Offset** de la pagina: Con el numero de pagina virtual se indexa la **Page Table** para encontrar el marco fisico (**Physical Frame Number**; **FPN**) en el cual reside la pagina; luego solo se reemplaza el VPN por el PFN y se mantiene el mismo offset (el cual señala el byte, dentro de la pagina, que estamos solicitando).
+
+#### Page Tables
+
+Son las estructuras de datos usadas para mapear las direcciones virtuales a direccione fisicas. Al ser largas y muchas (cada una tiene muchas **Page Table Entry**(ies) (**PTE**); una VPN de 20 bits, por ejemplo, implica $$2^{20}$$ traducciones) no se almacenan en la MMU, sino directamente en memoria.
+
+#### Organizacion
+
+La mas simple es **Linear Page Table**; la page table es vista como un array el cual se indexa con el VPN y se busca el PTE (entrada en la page table) de dicha indexacion para encontrar el PFN.
+
+Cada PTE tiene algunos bits importantes:
+
+* **Valid Bit**: Permite reservar address space al marcar paginas como invalidas, evitando tener que asignarles memoria (por ejemplo: el espacio aun no solicitado entre el code/heap y el stack de un proceso al momento de crearlo).
+
+* **Protection Bits**: Indica si una pagina puede ser leida, escrita o ejecutada.
+
+* **Present Bit**: Indica si se encuentra en memoria fisica o en disco.
+
+* **Dirty Bit**: Indica si una pagina ha sido modificada desde que fue traida a memoria.
+
+* **Accessed Bit** ("Reference"): Indica si la pagina ha sido accedida (util para determinar paginas populares que deben ser mantenidas en memoria).
+
+Notar que diferentes procesos (y diferentes VPN) pueden apuntar a una misma pagina (direccion) fisica (lo que reduce el numero de paginas fisicas en uso). Para esos casos, puede usarse un bit **G** que indica si la pagina es compartida globalmente entre mas de un proceso.
+
+Tanto el valid bit como los protection bit pueden lanzar una trap en caso de intentar acceder a la pagina cuando no se deberia poder hacerlo.
+
+#### Rapidez y Paginacion
+
+La paginacion requiere que se realice una referencia a memoria extra para buscar la traduccion de la page table (de virtual a fisica, de la VPN a PTE y luego a PFN), lo cual es costoso, y dado el tamaño de las page tables, se relentiza demasiado el sistema.
+
+Cuando corre, cada instruccion fetcheada genera dos referencias de memoria; una a la page table para encontrar el physical frame en la que la instruccion reside, y otra a la instruccion en si misma para poder fetchearla hacia la CPU.
+
+---
