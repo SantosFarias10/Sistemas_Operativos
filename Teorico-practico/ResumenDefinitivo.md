@@ -112,15 +112,15 @@ Esta informacion sobre los procesos del sistema nos permite realizar un **Contex
 
 #### Notar
 
-* $WallTime >= CPU Time$: Cuando el proceso se ejecuta en un solo nucleo o en multiples nucleos pero sin paralelismo (un nucleo alternado entre varios hilos).
+* $$WallTime >= CPU Time$$: Cuando el proceso se ejecuta en un solo nucleo o en multiples nucleos pero sin paralelismo (un nucleo alternado entre varios hilos).
 
-* $WallTime < CPU Time$: Puede llegar a suceder si el proceso se ejecuta en multiples nucleos simultaneamente (paralelismo), ya que el CPU time se suma en cada nucleo que esta en uso.
+* $$WallTime < CPU Time$$: Puede llegar a suceder si el proceso se ejecuta en multiples nucleos simultaneamente (paralelismo), ya que el CPU time se suma en cada nucleo que esta en uso.
 
-* $UserTime < WallTime$: El proceso parte del tiempo esperando: ya sea I/O, bloqueado, o al `return` del trap cuando hace una System Call y pasa a modo kernel.
+* $$UserTime < WallTime$$: El proceso parte del tiempo esperando: ya sea I/O, bloqueado, o al `return` del trap cuando hace una System Call y pasa a modo kernel.
 
-* $UserTime = WallTime$: Un proceso sin hilos se ejecuta en modo usuario, sin interrupciones ni operaciones de I/O, sin llamadas al sistema, y no se bloquea ni o sufre Context Switches.
+* $$UserTime = WallTime$$: Un proceso sin hilos se ejecuta en modo usuario, sin interrupciones ni operaciones de I/O, sin llamadas al sistema, y no se bloquea ni o sufre Context Switches.
 
-* $UserTime > WallTime$: Proceso multihilo, en el que cada hilo ejecuta en un core distinto y luego se suman todos sus tiempos de usuario.
+* $$UserTime > WallTime$$: Proceso multihilo, en el que cada hilo ejecuta en un core distinto y luego se suman todos sus tiempos de usuario.
 
 ---
 
@@ -274,7 +274,7 @@ Antes de ver como se desarrolla una politica, hacemos algunas suposiciones sobre
 
 #### Metricas de la Planificacion
 
-El **Turnaround Time** ($$*T_{turnaround}*$$) es la metrica que mide el tiempo total que tarda un proceso desde que llega al sistema hasta que finaliza:
+El **Turnaround Time** ($$T_{turnaround}$$) es la metrica que mide el tiempo total que tarda un proceso desde que llega al sistema hasta que finaliza:
 
 $$
 T_{turnaround} = T_{completion} - T_{arrival}
