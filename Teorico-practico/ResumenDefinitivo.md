@@ -712,3 +712,31 @@ Las memorias cache son veloces pero pequeñas. Si para insertar una nueva entrad
 ---
 
 ### Capitulo 20: Tablas de Paginacion Mas Pequeñas
+
+Un problema es que las page tables ocuran mucho espacio en memoria, cada proceso tiene su page table. La idea es administrar la memoria de manera mas eficiente, reduciendo el *Overhead* de manera de lograr una sola gran page table.
+
+Intentar resolver el problema usando paginas mas grandes generaria un gran desperdicio de espacio dentro de las paginas cuando un proceso requiere de poca memoria, llevando a **Fragmentacion Interna**.
+
+Por otro lado, intentar combinar paginacion y segmentacion para tener una page table por cada segmento del programa (code, heap, stack) en vez de una sola para todo el address space (lo que llevaba a marcar espacios de paginas sin usar como invalidas), o sea usar segmentacion externa con paginacion en cada segmento, falla ya que da por hecho cierto patron del uso del address space; si tenemos poco uso en un segmento determinado, se sigue desperdiciando espacio. A su vez, causa **Fragmentacion Externa**; las page table ahora son de tamaño arbitrario, dificultando la tarea de encontrar lugar para almacenarlas.
+
+#### Page Tables de Nivel-Multiple
+
+La solucion adoptada. No usa segmentacion pero busca solucionar el espacio desperdiciado por paginas invalidas/sin asignar en la page table. Este enfoque consigue la page table lineal en algo parecido a un arbol.
+
+La idea es cortar la page table en unidades del tamaño de una pagina, y si una PTE (*Page Table Entry*) entera esta sin usar/invalida, directamente no allocar esa pagina (a diferencia de las page table lineales, en donde ocuparia memoria).
+
+Para saber que pagina es valida (y, de serlo, donde esta en memoria) se utiliza una estructura llamada **Page Directory** (directorio de paginas, una "meta page table"), la cual indica donde esta una pagina de la page table, o si la pagina entera de la page table no contiene paginas validas.
+
+![Page Tables Multi-Nivel](../Teorico-practico/imagenes/figure20_3.png)
+
+* A la izquierda se observa una **Page Table Lineal** y en la derecha una **Page Table Multi-Nivel**. Se observa que solo la PTE 0 y 3 esta en uso.
+
+Esta page table en dos niveles consta de un numero de **Page Directory Entry** (**PDE**) (entradas del directorio de paginas). Cada PDE tiene al menos un **Valid Bit** y un **Page Frame Number** (**PNF**), similar a PTE. El significado de este valid bit es que si la PDE es valida, al menos una de las paginas de la page table a la que señala la entry es valida, con que una sea valida el valid bit ya sera 1. Ademas tiene un bit **Present** que indica si la page table que le sigue esta presente o no.
+
+Cada porcion de la page table entra en una pagina, haciendo facil para el SO obtener la siguiente pagina libre cuando necesite hacer crecer una page table (manejo de memoria mas facil). El **Page Directory Base Register** (**PDBR**) es un registro del procesador que apunta a la base del page directory.
+
+Este enfoque permite no tener que almacenar page tables vacias, pero añade un **Nivel de Indireccion** a traves del page directory, que señala a partes de la page table, lo que permite poner las page table pages donde queramos en memoria fisica. El costo de este nivel extra es que ante un TLB miss ahora se deben hacer **Dos Cargas** antes de obtener la traduccion; primero el page directory y luego la page tables page. Esto es un ejemplo de **Trade Off**, ganamos memoria pero perdemos mucho mas tiempo en un TLB miss.
+
+#### Mas de Dos Niveles
+
+
