@@ -711,4 +711,4 @@ Las memorias cache son veloces pero pequeñas. Si para insertar una nueva entrad
 
 ---
 
-Capitulo 20: Tablas de Paginacion Mas Pequeñas
+### Capitulo 20: Tablas de Paginacion Mas Pequeñas
