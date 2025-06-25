@@ -80,6 +80,10 @@ Para correr un programa (osea convertirlo en proceso) el SO debe **Cargar** su c
 
 Se deben proporcionar memoria **Stack** (variables locales, parametros de llamada, direcciones de retorno, etc)y **Heap** (informacion dinamica y variables en tamaño, estructura de datos como listas; todo lo relacionado con `malloc`y `free`) para el programa. En el Stack, ademas, el SO establece los parametros `argv` (arreglos de cadenas (de tipo `char *`) que contiene los argumenos como `strings`) y `argc count` (entero que indica **Cuantos** argumentos se pasaron al programa desde la linea de comandos. Siempre es al menos 1, ya que se incluye el nombre del programa).
 
+![Memoria](../Teorico-practico/imagenes/memory.png)
+
+* Memoria asignada a un proceso al momento de su creacion.
+
 #### Estado de un Proceso
 
 Cada proceso esta en alguno (solo uno) de los siguientes estados:
@@ -91,6 +95,10 @@ Cada proceso esta en alguno (solo uno) de los siguientes estados:
 * **Blocked**: No puede correr hasta que otro evento ocurra (por ejemplo un dispositivo I/O).
 
 * **Zombie**: El proceso hijo finaliza, pero el padre aun no ha llamado a `wait()` para leerlo.
+
+![Estados de un proceso](../Teorico-practico/imagenes/Figure4_2.png)
+
+* Transiciones entre estados de un proceso.
 
 El paso entre los distintos estados esta dado por eventos del software o hardware, llamadas **Interrupciones** (por ejemplo de reloj, del disco duro, etc).
 
@@ -218,6 +226,10 @@ En **LDE** (*Limited Direct Execution*) en el booteo inicia la trap table y el C
 
 Cada proceso tiene un Kernel Stack, donde los registros (incluyendo el PC) se guardan y restauran (por hardware) cuando se entra o sale del kernel.
 
+![Linea de tiempo del protocolo de LDE](../Teorico-practico/imagenes/protocolo_LDE.png)
+
+* Linea de tiempo de las dos fases del protocolo de LDE ante una trap por instruccion privilegiada.
+
 #### Intercambio entre Procesos
 
 Si un proceso corre en el CPU, el SO no esta corriendo. Sin embargo, el mismo debe asegurarse poder recuperar el control para cambiar de proceso y lograr *time sharing*
@@ -234,6 +246,12 @@ En el booteo el SO deja explicitado que codigo correr en una interrupcion, momen
 
 El hardware se encarga de guardar el estado del proceso actual al momento de la interrupcion para su posterior return-from-trap.
 
+![](../Teorico-practico/imagenes/x.png)
+
+* En cada proceso una porcion se ejecuta en user mode y otra en kernel mode. Para pasar el scheduler, se da un segundo cambio de contexto; de kernel mode al scheduler.
+
+* En el cambio de contexto de user mode a kernel mode, debemos guardar todo. En el cambio de contexto del kernel mode al scheduler, en cambio, podemos hacer algunas asunciones.
+
 #### Guardar y Restaurar el Contexto
 
 Si cuando el SO toma control y decide cambiar a otro proceso (usando la rutina *switch*), ejecuta un codigo de bajo nivel, el **Context Switch**, que le permite guardar los valores de los registros del programa en ejecucion (en el Kernel Stack del proceso) y restaurar otros para el proceso que pasara a ejecutarse (desde su Kernel Stack).
@@ -247,6 +265,10 @@ Cada vez que se da un context switch, por ejemplo: ante una Syscall exception, e
 #### Concurrencia
 
 Para que no ocurran *interrupts* simultaneas, se suelen deshabilitar las interrupciones mientras se esta lidiando con interrupciones. Tambien se usan **Locks** para proteger las estructuras internas.
+
+![](../Teorico-practico/imagenes/y.png)
+
+* Linea de tiempo de la segunda fase del protocolo de LDE ante una interrupcion por tiempo.
 
 #### Resumen
 
@@ -326,6 +348,10 @@ Todos los programas que usan I/O no usan la CPU mientras realizan ese trabajo, y
 
 De esta forma, se utiliza con mas eficiencia el CPU, suponiendo cortos periodos de uso del CPU y el I/O a la vez entre programas, tratando cada pequeño tiempo de uso del CPU como proceso y maximizar el uso de los recursos.
 
+![](../Teorico-practico/imagenes/a.png)
+
+* Uso de los recursos con y sin superposiciones de procesos.
+
 #### NO mas Oraculo
 
 Si olviamos la suposicion (5), normalmente no se sabe la longitud de un proceso. Sin esto *SJF* y *STCF* no funcionan bien.
@@ -347,6 +373,10 @@ La MLFQ trata de aprender del Comportamiento de los procesos para predecir el **
 Ademas, periodicamente (cada un tiempo S) se aumenta la prioridad de todos los procesos (**Priority Boost**) Poniendolos en la cola de mayor prioridad. Esto garantiza que los procesos no se queden sin CPU time (evita **Starvation** si se ejecutan demasiados procesos interactivos), que si un **Long-Running Job** se vuelve **Interactivo** el scheduler lo trate como tal (en vez de quedarse en las colas de baja prioridad), y que los procesos no puedan **Jugar** con el **Scheduler** (liberando el CPU justo antes de terminar su *Time Slice* para mantenerse en prioridad alta y monopolizar su uso).
 
 La duracion de S debe ser bien elegida para que no haya starvation (si es muy largo) y que los procesos interactivos funcionen eficientemente (no muy corto). Por otra parte, para prevenir que un proceso juegue con el scheduler para evitar bajar de cola de prioridad, se le da a cada proceso un tiempo total (dependiendo de la cola; time slice mas cortos a mayor prioridad) que no debe sobrepasar, independientemente de si fue un uso de los CPU interrumpido o si hubo context switch en el medio.
+
+![](../Teorico-practico/imagenes/b.png)
+
+* Ejemplo de ejecucion sin (izquieda) y con (derecha) *Gaming Tolerance*.
 
 Las decisiones sobre la cantidad de colas, la duracion de los slices, el quantum de cada cola, o cada cuanto hacer el boost, depende de los objetivos del planificador, y varian de un SO a otro. Son decisiones fundamentales, y suelen ser llamadas **Constantes Vudu**. En algunos SO, se permite al usuario establecer sugerencias sobre la prioridad de algunos programas.
 
@@ -399,6 +429,10 @@ El address space (espacio **Direccionable**) de un proceso contiene todo el esta
 * El **Stack** es usado para guardar la cadena de llamadas a funcion; direccion de retorno, variables locales y parametros.
 
 * El **Heap** se utiliza para almacenar elementos dinamicamente (*Dynamically Allocated*), o sea, es memoria manejada por el usuario (usando funciones como `malloc` en C).
+
+![](../Teorico-practico/imagenes/c.png)
+
+* Ejemplo de Address Space. La direccion 0x00 es virtual; en realidad el programa se encuentra en una direccion arbitraria de la memoria fisica.
 
 El codigo tiene tamaño fijo (pero no es necesariamente estatico; puede ser *self-modifying code*) lo cual lo hace facil de poner en memoria. En cambio, el stack y el heap pueden crecer o decrecer mientras el programa corre. Al poner en forma opuesta el heap y stack (por convencion) podemos permitirles **Cambiar** su **Tamaño** siguiendo direcciones opuestas (luego, al trabajar con multiples hilos esta forma simple de ubicarlos ya no sirve).
 
@@ -462,6 +496,8 @@ Algunos lenguajes tienen un manejo de memoria automatico (**Garbage Collector**)
 
 ---
 
+### Capitulo 15: Traduccion de Direcciones
+
 En el desarrollo de la virtualizacion del CPU nos centramos en el mecanismo general LDE, cuya idea es dejar el proceso correr en el hardware la mayor parte del tiempo, y que en ciertos puntos clave el SO se involucre y tome decisiones que le permitan asegurarse, con ayuda del hardware, mantener el control mientras trata de mantenerse fuera del camino del proceso.
 
 En la **Virtualizacion** de la memoria se busca algo similar; obtener **Control** y **Eficiencia** mientras se provee la virtualizacion. La eficiencia es lo que dicta que se use el apoyo del hardware. Controlar implica que el SO asegure que ninguna aplicacion tenga permitido acceder a otroa memoria salvo a la suya, y asi proteger aplicaciones unas de otras y al SO de las aplicaciones (lo que tambien requiere ayuda del hardware).
@@ -483,6 +519,10 @@ Por ahora supondremos, por simplicidad, 3 cosas irreales:
 * El tamaño del address space es menor que la memoria fisica.
 
 * Todos los address space tienen el mismo tamaño.
+
+![](../Teorico-practico/imagenes/d.png)
+
+* Ejemplo de programa cargado en memoria. Su direccion inicial es 0 (no 32KB) y crece hasta un maximo de 16KB (hasta los 48KB). Cualquier referencia a memoria que el programa haga debe estar dentro de estos limites. El primer bloque de memoria es para el SO mismo. El valor de su registro Base es 32K, y el Bound es de 16K.
 
 #### Reubicacion Dinamica de Memoria (Apoyada en el Hardware)
 
@@ -611,6 +651,10 @@ Si se corta el espacio disponible en bloques de tamaños diversos se genera frag
 
 Un enfoque diferente consiste en cortar el espacio en partes iguales de un tamaño estandar. Esto en memoria virtual se llama **Paginacion** (**Paging**) y cada unidad es una **Pagina** (**Page**). A la memoria fisica se la ve como un array de slots iguales llamados **Marcos de Pagina** (**Page Frame**).
 
+![](../Teorico-practico/imagenes/e.png)
+
+* Ejemplo de Page Table en memoria fisica.
+
 #### Descripcion General
 
 La paginacion tiene varias ventajas comparado con los enfoques anteriores:
@@ -622,6 +666,10 @@ La paginacion tiene varias ventajas comparado con los enfoques anteriores:
 Para mantener un registro de donde cada pagina virtual del address space esta situada en memoria fisica, el SO guarda la informacion de cada proceso en una estructura conocida como **Page Table** (Tabla de Paginas), la cual almacena las **Adress Translation** de cada pagina virtual.
 
 Para que el hardware y el SO traduzca una direccion virtual debemos dividir en 2 componentes la direccion: El **Virtual Page Number** (**VPN**, numero de pagina virtual) y el **Offset** de la pagina: Con el numero de pagina virtual se indexa la **Page Table** para encontrar el marco fisico (**Physical Frame Number**; **FPN**) en el cual reside la pagina; luego solo se reemplaza el VPN por el PFN y se mantiene el mismo offset (el cual señala el byte, dentro de la pagina, que estamos solicitando).
+
+![](../Teorico-practico/imagenes/figure18_3.png)
+
+* Traduccion de una Virtual Page Number (VPN) a una Physical Frame Number (FPN).
 
 #### Page Tables
 
@@ -642,6 +690,10 @@ Cada PTE tiene algunos bits importantes:
 * **Dirty Bit**: Indica si una pagina ha sido modificada desde que fue traida a memoria.
 
 * **Accessed Bit** ("Reference"): Indica si la pagina ha sido accedida (util para determinar paginas populares que deben ser mantenidas en memoria).
+
+![](../Teorico-practico/imagenes/figure18_5.png)
+
+* Ejemplo de PTE, donde P = *present bit*, R/W = *allowed read/write*, U/S = *allowed access to user-mode processes*, PWT/PCD/PAT/G = *hardware catching*, A = *accessed*, D = *dirty*, PFN.
 
 Notar que diferentes procesos (y diferentes VPN) pueden apuntar a una misma pagina (direccion) fisica (lo que reduce el numero de paginas fisicas en uso). Para esos casos, puede usarse un bit **G** que indica si la pagina es compartida globalmente entre mas de un proceso.
 
@@ -676,6 +728,10 @@ Supongamos una page table lineal y un TLB manejado por hardware. El algoritmo co
 #### Localidad Espacial y Temporal
 
 Supongamos un array y un loop que lo recorre linealmente. Si en cada pagina de la page table tenemos varios elementos del array, el primero al que queramos acceder de la pagina va a ser un miss (por lo que el TLB va a tener que buscar la traduccion) pero luego hara hit como todos los elementos que esten en la misma pagina, mejorando drasticamente el desempeño en comparacion a tener que buscar la traduccion de la referencia virtual para cada uno de ellos.
+
+![](../Teorico-practico/imagenes/figure19_2.png)
+
+* a[0] seria miss pero a[1] serian hit, a[3] seria miss pero ... (etc).
 
 Esto se da porque, ante un TLB miss, se guarda **Toda la page** en la TLB, y no solo la direccion cuya traduccion fue requerida. Osea, la TLB (la memoria cache) se beneficia de la **Spatial Locality** (que los elementos estan cerca unos de otros) y, si el programa se vuelve a ejecutar rapidamente (por ejemplo: un loop) se beneficia de **Temporal Locality** (la rapida re-referenciacion a items en memoria en el tiempo) ya que todavia formaran parte de la TLB y volverian a ser hit.
 
