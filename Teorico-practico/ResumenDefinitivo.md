@@ -795,4 +795,56 @@ Este enfoque permite no tener que almacenar page tables vacias, pero añade un *
 
 #### Mas de Dos Niveles
 
+Cuando los bits de indexacion del Page Directory son muchos, no es posible que cada parte de la multi level page table entre en una pagina. Para solucionarlo, se puede añadir otro nivel en la forma de otro page directory por encima del primero, partiendo los bits de indexacion (PAE). Esto permite evitar o un page directory grande o una page table grande.
 
+El primer page directory chequea validez, luego la entrada valida señala al segundo page directory, en el cual si la entrada de este es valida finalmente se llega a la traduccion de la VPN a la PFN.
+
+Aumentar los niveles aumenta, nuevamente, el costo de la busqueda de la traduccion en este caso de un TLB miss.
+
+![](../Teorico-practico/imagenes/example20_2.png)
+
+* Ejemplo para paginas de 521 bytes y PTEs de 4 bytes.
+
+#### Swapear Page Tables al Disco
+
+Hasta ahora suponiamos que las pages table estaban en memoria del kernel, pero incluso con todos estos "trucos", las page tables pueden ser demasiado grandes para entrar en memoria todas al mismo tiempo. Cuando esto pasa, algunas se colocan en **Memoria Virtual del Kernel**, permitiendo **Pasar** (**Swapear**) algunas de estas page tables al disco cuando hay poca memoria. Claramente, este swap introduce una penalizacion de tiempo grande, ya que si un proceso intenta leer memoria virtual de su address space y esta no esta en la RAM, se genera un **Page Fault** y la misma debe ser traida desde el disco.
+
+#### Ejemplos
+
+Recordar que son estructuras de datos que, a partir de una direccion virtual de 32 bits (arriba), permiten generar una direccion fisica de 32 bits (64 si se usa PAE).
+
+![](../Teorico-practico/imagenes/f.png)
+
+* Page Table 10/22 (de un nivel) para paginas de 4MiB.
+
+![](../Teorico-practico/imagenes/g.png)
+
+* Page Table 10/10/12 (de dos niveles) para paginas de 4K, de un i386 (x86).
+
+* **Cr3**: Registro especial de 32 bits solo modificable en modo kernel, que apunta a la Base de la tabla Page Directory. Los ultimos 12 bits (3 hexa) del CR3 siempre son 0 (en hexa) porque siempre debe estar alineado a saltos de 4K.
+
+* **Page Directory**: Tabla que tiene 1024 entradas, cada una de 32 bits (4 bytes). 1024 x 32 bits = 4K lo cual es el tamaño de la tabla. Para direccionar esas 1024 entradas son necesarios los 10 bits mas significativos de la direccion virtual ($$2^{10}$$ = 1024). La entrada seleccionada es un puntero que define la base de la Page Table (su posicion 0 ya que crece de forma negativa, o sea, la posicion desde la cual se comienza a contar (descontar) para usar el proximo indice).
+
+* **Page Table**: Tabla de 1024 entradas de 32 bits, cuya Base esta dada por el puntero de la Page Directory,  y cuyo indice esta dado por los 10 bits que le siguen a los usados por la Page Directory. La entrada seleccionada es un puntero (20 bits) que indica la base de la pagina fisica que se va a usar.
+
+* **Memory Page**: Es la pagina fisica que se va a leer, cuya base esta dada por la Page Table. Tiene 4K entradas, para lo cual son necesarios los 12 bits menos significativos (llamados offset) de la direccion virtual ($$2^{12}$$ = 4K) para seleccionar la pagina.
+
+Recordar que una pagina no puede contener segmentos (heap, stack, code) de distintos tipos para proteger a cada uno de manera adecuada.
+
+En un sistema con paginas lineales puede que una Page Table corresponda a un proceso. En uno de paginas multinivel hay todo un directorio por cada proceso, el cual puede tener 1 o mas tablas.
+
+![](../Teorico-practico/imagenes/h.png)
+
+* Page Table 9/9/12 (de tres niveles) de un i386 (x86) con PAE (Physical Address Extension).
+
+Physical Address Extension permite direccionar mas de 4GB de memoria fisica ($$2^{32}$$ bytes, limite del diseño anterior) al pasar las tables entries de 32 bits a 64 bits (sumando mas espacio en el pagre frame number de cada una de ellas). Para ello, añade un nivel mas en la jerarquia de las page tables. El virtual address space todavia es de hasta 4GB (32 bits).
+
+![](../Teorico-practico/imagenes/i.png)
+
+* Traduccion de direcciones en la arquitectura RISC-V (9/9/9).
+
+Page Directory ahora con un ancho de 64 bits (al igual que la direccion virtual) y con direcciones fisicas de 56 bits.
+
+Notar que al ser 9/9/9/12 usa los bits menos significativos de los 64 ahora disponible (los restantes son bits EXT de extension).
+
+---
