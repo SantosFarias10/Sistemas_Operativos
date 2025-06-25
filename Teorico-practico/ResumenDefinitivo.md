@@ -595,7 +595,7 @@ El allocator ideal es rapido, eficiente enn el uso del espacio (minimizando frag
 
     * Ante apliciones que tengan peticiones **Recurrentes** de tamaño similar, se crea una nueva lista para el manejo de objetos de ese tipo, y se envian las demas peticiones al allocator general. La fragmentacion es menor y los pedidos de dicho tamaño se satisfacen mas rapido.
 
-    * Por ejemplo, el **Slab Allocator** asigna un numero de ***Object Caches** para objetos del kernel que se solicitan seguido. Si le falta espacio pide mas slabs (bloques pequeños) de memoria. Este allocator tambien mantiene los free objects de las listas en un estado pre inicializado.
+    * Por ejemplo, el **Slab Allocator** asigna un numero de **Object Caches** para objetos del kernel que se solicitan seguido. Si le falta espacio pide mas slabs (bloques pequeños) de memoria. Este allocator tambien mantiene los free objects de las listas en un estado pre inicializado.
 
 6. **Buddy Allocation**:
 
