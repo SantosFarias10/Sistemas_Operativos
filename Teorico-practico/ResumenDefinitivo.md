@@ -848,3 +848,15 @@ Page Directory ahora con un ancho de 64 bits (al igual que la direccion virtual)
 Notar que al ser 9/9/9/12 usa los bits menos significativos de los 64 ahora disponible (los restantes son bits EXT de extension).
 
 ---
+
+# Practico
+
+## 1
+
+Planificar con RR, Q = 2, para los siguientes procesos que tienen mezcla de computo CPU y espera I/O. Suponga que hay 3 nucleos de ejecucion (por eso cada celda de tiempo esta subdividida en 3 partes)
+
+![Primer ejercicio para practica](../Teorico-practico/imagenes/ej1.png)
+
+#### Solucion
+
+| A - - | A - - | A - - | A° - - | A° B - | A° B - | A° C B | A° C B | A° B° C | A B° C | A B° C | C A B | C A - | C A - | C - - | C - - |
