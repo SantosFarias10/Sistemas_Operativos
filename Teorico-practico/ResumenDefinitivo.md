@@ -1113,10 +1113,109 @@ Notar que al ser 9/9/9/12 usa los bits menos significativos de los 64 ahora disp
 
 Planificar con RR, Q = 2, para los siguientes procesos que tienen mezcla de computo CPU y espera I/O. Suponga que hay 3 nucleos de ejecucion (por eso cada celda de tiempo esta subdividida en 3 partes)
 
-![Primer ejercicio para practica](../Teorico-practico/imagenes/ej1.png)
+![Primer ejercicio para practicar](../Teorico-practico/imagenes/ej1.png)
 
 #### Solucion
 
 | A - - | A - - | A - - | A° - - | A° B - | A° B - | A° C B | A° C B | A° B° C | A B° C | A B° C | C A B | C A - | C A - | C - - | C - - |
 
+## 2
+
+c(10,10,12)->(20,12). Supongamos que tenemos el registro de paginacion apuntando al marco fisico CR3=0C0CA
+
+![Segundo ejercicio para practicar](../Teorico-practico/imagenes/Ej2.png)
+
+1. Completar el PD y la PT para que mapee las direcciones virtuales a fisicas como sigue:
+
+* 0x00000BAD -> 0x0060DBAD
+
+=> Tenemos 10 bit de PD, 10 bit de PF y 12 bit de Offset
+
+0x00000BAD = 0000 0000 0000 0000 0000 1011 1010 1101
+
+PD = 0000 0000 00 = 0x000
+
+PT = 00 0000 0000 = 0x000
+
+Offset = 1011 1010 1101 = 0xBAD
+
+=> 0x0C0CA[0x000] = 0x0C01A, 0x0C01A[0x000] = 0x0CAFE
+
+* 0xC0000FEE -> 0x0CAFE000
+
+0xC0000FEE = 1100 0000 0000 0000 0000 1111 1110 1110
+
+PD = 1100 0000 00 = 0x300
+
+PT = 00 0000 0000 = 0x000
+
+Offset = 1111 1110 1110 = 0xFEE
+
+=> 0x0C0CA[0x300] = 0x0CAFE y 0x0CAFE[0x000] = 0x0CAFE
+
+2. Continuando con el mapeo, hacer que ademas mapee de virtual a fisica.
+
+* 0xFFFFF000 -> 0x0C0CA000
+
+=> 0xFFFFF000 = 1111 1111 1111 1111 1111 0000 0000 0000
+
+PD = 1111 1111 11 = 0x3FF
+
+PT = 11 1111 1111 = 0x3FF
+
+Offset = 0000 0000 0000 = 0x000
+
+=> 0x0C0CA[0x3FF] = 0x0C01A y 0x0C01A[0x3FF] = 0x0C0CA
+
+* 0xFFC00000 -> 0x0CAFE000
+
+=> 0xFFC00000 = 1111 1111 1100 0000 0000 0000 0000 0000
+
+PD = 1111 1111 11 = 0x3FF
+
+PT = 0000 0000 00 = 0x000
+
+Offset = 0000 0000 0000 = 0x000
+
+=> 0x0C0CA[0x3FF] = 0x0C01A y 0x0C01A[0x000] = 0x0CAFE
+
+#### Cuadro Final
+
+```
+0x0C0CA
+-----------------------------
+dir: Marco Fisico, XWRV
+0x3FF: 0x0C01A, XMRV
+...
+...
+0x003: 0x _ _ _ _ _, _ _ _ _
+0x002: 0x _ _ _ _ _, _ _ _ _
+0x001: 0x _ _ _ _ _, _ _ _ _
+0x000: 0x0C01A, XMRV
+-----------------------------
+0x0C01A
+-----------------------------
+dir: Marco Fisico, XWRV
+0x3FF: 0x0CAFE, _ _ _ _
+...
+0x300: 0x0CAFE, XWRV
+...
+0x003: 0x _ _ _ _ _, _ _ _ _
+0x002: 0x _ _ _ _ _, _ _ _ _
+0x001: 0x _ _ _ _ _, _ _ _ _
+0x000: 0x0CAFE, XWRV
+-----------------------------
+0x0CAFE
+-----------------------------
+dir: Marco Fisico, XWRV
+0x3FF: 0x0C0CA, _ _ _ _
+...
+...
+...
+0x003: 0x _ _ _ _ _, _ _ _ _
+0x002: 0x _ _ _ _ _, _ _ _ _
+0x001: 0x _ _ _ _ _, _ _ _ _
+0x000: 0x0060D, XWRV
+-----------------------------
+```
 ---
