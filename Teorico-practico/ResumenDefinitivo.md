@@ -130,6 +130,40 @@ Esta informacion sobre los procesos del sistema nos permite realizar un **Contex
 
 * $$UserTime > WallTime$$: Proceso multihilo, en el que cada hilo ejecuta en un core distinto y luego se suman todos sus tiempos de usuario.
 
+#### Conceptos Importantes!!!!
+
+* Un **Proceso** es un programa en ejecución. Lo constituye lo que llamamos **Machine state** o **Máquina de estado**, donde se encuentra la **Memoria**, la memoria que el proceso puede acceder es llamada **address spaces** o **Espacio de direcciones**. Los **Registros**, algunos importantes como por ejemplo el PC (*Program Counter*) que nos dice que instrucción es la siguiente en ejecutar, del programa el **Stack Pointer**, se usa para manejar la pila de los parametros de funciones, variables locales, return address. También tienen la información I/O.
+
+* Lo que debe incluirse en cualquier interfaz de un SO, Estas APIs, estan disponibles en cualquier SO:
+
+    - **Crear**: Metodo para crear nuevos procesos.
+
+    - **Destruir**: Metodo para destruir un proceso / Forzar la detencion de un proceso.
+
+    - **Esperar**: Metodo para esperar un proceso.
+
+    - **Controles varios**: Por ejemplo: Metodo para suspender un proceso por un tiempo y, detener su ejecucion y despues continuar ejecutandolo.
+
+    - **Estado**: Metodo para obtener informacion de estado de un proceso.
+
+* Los proceso pueden estar en diferentes **Estados**:
+
+    - **Running** es el estado con el control de la CPU.
+
+    - **Ready** son los procesos en espera para usar la CPU.
+
+    - **Blocked** puede ser cuando un proceso espera una interacción con algun I/O.
+
+![Figure 4.2](../Teorico-practico/imagenes/Figure4_2.png)
+
+* Cuando queremos ejecutar mas de un proceso a la vez. El SO crea una ilusion **Virtualizando** la CPU. Esto lo logra ejecutando un proceso, luego deteniendolo y ejecutando otro, y asi sucesivamente, el SO puede crear la ilusion de que existen muchas CPUs virtuales cuando en realidad hay solo una CPU fisica. Esta tecnica es conocida como **Tiempo Compartido** de la CPU, permite a los usuarios ejecutar tantos procesos concurrentes como deseen.
+
+* Para implementar la virtualizacion de la CPU, el SO necesitara maquinaria de bajo nivel a la que llamaremos **Mecanismo**; son metodos o protocolos de bajo nivel que implementan una parte de la funcionalidad necesaria. Por ejemplo: **Context Switch**.
+
+* Encima de estos mecanismos reside parte de la inteligencia del SO, en forma de **Politicas**. Son algoritmos para tomar algun tipo de decision dentro del SO. Por ejemplo: las politicas de planificacion.
+
+* La contrapartida del tiempo compartido es el **Espacio Compartido**, donde un recurso se divide (en el espacio) entre aquellos que deseen utilizarlo.
+
 ---
 
 ### Capitulo 5: La API de los Procesos
