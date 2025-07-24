@@ -390,15 +390,21 @@ $$T_{turnaround}$$ es una metrica de **Performance** (rendimiento). $$T_{respons
     
 Es simple y facil de implementar pero con mal $$T_{turnaround}$$. Puede sufrir de **Convoy Effect**, es decir, puede llegar antes un proceso mas largo que los demas y relentizar al resto, teniendo a procesos mas cortos en espera, ya que cada proceso corre hasta finalizar , aumentando asi el tiempo promedio de entrega del sistema.
 
+![FIFO](../Teorico-practico/imagenes/figure7_1.png)
+
 #### Politica: *Shortest Job First* (*SJF*):
 
 Siempre corre el proceso **Mas Corto** primero, minimizando asi el $$T_{turnaround}$$ promedio.
 
 Si llega primero un proceso largo sera ejecutado, y si luego llega uno mas corto debera esperar a que finalice el primero, empeorando el $$T_{turnaround}$$ (se genera el mismo **Convoy Effect**).
 
+![SJF](../Teorico-practico/imagenes/figure7_3.png)
+
 #### Politica: *Shortest Time-to-Completion First* (*STCF*) (llamado *PSJF*: *Preemptive Shortest Job First*):
 
 Los procesos no corren hasta acabar. El *scheduler* puede hacer **Preempt** de un trabajo (darle prioridad) y realizar un context switch en los momentos en los que el SO retoma el control del CPU (interrupts, Syscalls, etc). Tiene mal *Response Time*.
+
+![STCF](../Teorico-practico/imagenes/figure7_5.png)
 
 #### Metrica: *Response Time*
 
@@ -419,6 +425,8 @@ La duracion del time slice es importante; si es muy corta es bueno para el $$T_{
 RR es **Fair** (justa), lo que hace que sea mala en su tiempo de entrega. Es un *Tradeo-off* a considerar dependiendo del objetivo que se tenga con el scheduler.
 
 Ante dos procesos que arriban a la vez se debe establecer una politica que determine cual se ejecuta, pero si uno ya estaba *ready* antes que otro, se respeta el orden FIFO, no el de la politica.
+
+![RR](../Teorico-practico/imagenes/figure7_7.png)
 
 #### Incorporando I/O
 
@@ -1224,5 +1232,93 @@ dir: Marco Fisico, XWRV
 0x000: 0x0060D, XWRV
 -----------------------------
 ```
+
+## 3
+
+Tenemos un esquema de paginacion RISC-V con paginas de 4 KB de 3 niveles con formato (9, 9, 9, 12) -> (44, 12) como muestra la imagen:
+
+![](../Teorico-practico/imagenes/ejercicio3parte1.png)
+
+Supongamos que tenemos el registro de paginas apuntando al marco fisico satp= 0x00000000FE0.
+
+![](../Teorico-practico/imagenes/ejercicio3parte2.png)
+
+1. Traducir de Virtual -> Fisica
+
+* 0x0000 = 000 0000 00|00 0000 000|0 0000 0000 |0000 0000 0000
+
+L2 = 0
+
+L1 = 0
+
+L0 = 0
+
+Offset = 0000 0000 0000 
+
+=> Como VPN[2] = 0 entonces accede a satp = 0x00000000FE0 a la direccion 0x000: 0x00000000FEA, como VPN[1] = 0, entonces accede a 0x00000000FEA a la direccion 0x000: 0x000000AD0BE, como VPN[0] = 0, entonces accede a 0x0000000ABAD a la direccion 0x000: 0x0000000ABAD = 0000 0000 0000 0000 0000 0000 0000 1010 1011 1010 1101 (44), como es valida entonces la usamos como PPN y le agregamos el offset de 0x0000, por lo que nos queda 0x0000000ABAD000 = 0000 0000 0000 0000 0000 0000 0000 1010 1011 1010 1101 0000 0000 0000 = a la direccion fisica.
+
+* 0x1000 = 0001 0000 0000 (Se rellena con ceros a la izquierda) => 000 0000 00|00 0000 000|0 0000 0001 |0000 0000 0000
+
+L2 = 0
+
+L1 = 0
+
+L0 = 1
+
+Offset = 0x000
+
+=> VPN[2] = 0 entonces se busca en la direccion 0x00000000FE0, buscamos la entrada 0x000 en la tabla; que es 0x00000000FEA, VPN[1] = 0, por lo que se busca en la direccion 0x00000000FEA, buscamos la entrada 0x000 en la tabla; que es 0x000000AD0BE y por ultimo VPN[0] = 1 por lo que se busca en la direccion 0x000000AD0BE, buscamos la entrada 0x001; que es 0x000CAFECAFE, pero esta entrada es invalida, por lo tanto 0x1000 no tiene una direccion Fisica.
+
+* 0x2000 = 0010 0000 0000 0000 = 000 0000 00|00 0000 000|0 0000 0010 |0000 0000 0000
+
+L2 = 0
+
+L1 = 0
+
+L0 = 1
+
+Offset = 0x000
+ 
+=> VPN[2] = 0 entonces se busca en la direccion 0x00000000FE0, buscamos la entrada 0x000 en la tabla; que es 0x00000000FEA, VPN[1] = 0, por lo que se busca en la direccion 0x00000000FEA, buscamos la entrada 0x000 en la tabla; que es 0x000000AD0BE y por ultimo VPN[0] = 2 por lo que se busca en la direccion 0x000000AD0BE, buscamos la entrada 0x002; que es 0x00000DECADA. Esta entrada es valida, pero no se puede escribir por lo que la direccion fisica de 0x2000 es 0x00000DECADA000.
+
+* 0x300 = 0011 0000 0000 0000 = 000 0000 00|00 0000 000|0 0000 0011 |0000 0000 0000
+
+L2 = 0
+
+L1 = 0
+
+L0 = 3
+
+Offset = 0x000
+
+=> VPN[2] = 0 entonces se busca en la direccion 0x00000000FE0, buscamos la entrada 0x000 en la tabla; que es 0x00000000FEA, VPN[1] = 0, por lo que se busca en la direccion 0x00000000FEA, buscamos la entrada 0x000 en la tabla; que es 0x000000AD0BE y por ultimo VPN[0] = 3 por lo que se busca en la direccion 0x000000AD0BE, buscamos la entrada 0x003; que es 0x00000D1AB10, pero esta entrada es invalida, por lo tanto 0x3000 no tiene una direccion Fisica.
+
+2. Traducir la direccion fisica 0xDECADA980 a TODAS LAS VIRTUALES que la apuntan.
+
+=> 0xDECADA980 = 1101 1110 1100 1010 1101 1010 1001 1000 0000
+
+PPN = 0xDECADA
+
+Offset = 0x980
+
+=> Las direcciones virtuales que apuntan a 0xDECADA980 son:
+
+* 000 0000 00|00 0000 000|0 0000 0010 |1001 1000 0000, 
+
+* 000 0000 00|00 0000 001|0 0000 0010 |1001 1000 0000,
+
+* 000 0000 00|00 0000 010|0 0000 0010 |1001 1000 0000,
+
+* 000 0000 01|00 0000 000|0 0000 0010 |1001 1000 0000, 
+
+* 000 0000 01|00 0000 001|0 0000 0010 |1001 1000 0000,
+
+* 000 0000 01|00 0000 010|0 0000 0010 |1001 1000 0000,
+
+* 000 0000 10|00 0000 000|0 0000 0010 |1001 1000 0000,
+
+* 000 0000 10|00 0000 001|0 0000 0010 |1001 1000 0000,
+
+* 000 0000 10|00 0000 010|0 0000 0010 |1001 1000 0000.
 
 ---
