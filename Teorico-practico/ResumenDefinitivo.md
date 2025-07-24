@@ -1321,4 +1321,45 @@ Offset = 0x980
 
 * 000 0000 10|00 0000 010|0 0000 0010 |1001 1000 0000.
 
+## 4
+
+Describir que hace el programa, cuantos padres e hijos tiene, etc. Se ejecuta con: ./a.out (7 veces)
+
+```c
+int main(int argc, char **argv) {
+    char buff[L] = {'\0'};
+    if (argc < 2){
+        return 0;
+    }
+    int rc = fork();
+    if (rc < 0){
+        return -1;
+    }
+    if (rc == 0 ){
+        close(1);
+        open(argv[0], 0);
+        read(1, buff, L);
+        close(0);
+        open(argv[0], O-TRUNCATE| 0-WRONLY);
+        write(0, buff, L);
+    } else {
+        execvp(argv[1], argv+1);
+    }
+}
+```
+
+vemos que el proceso hijo, cierra el descriptor de archivo 1 (stdout). Abre el archivo cuyo nombre esta en `argv[0]` (el nombre del programa, `./a.out`) en modo de lectura (`0`). Lee `L` bytes del archivo y los guarda en `buff`. Se cierra el descriptor `0` (stdin). Se vuelve abrir el mismo archivo en modo escritura (`O-WRONLY`), truncandolo (`0-TRUNCATE`). Se escribe el contenido en `buff` en el archivo.
+
+Mientras que el padre reemplaza su programa por el de `argv[1]`.
+
+Cada ejecucion de `/a.out` se crea un hijo (manipula el archivo `./a.out`) y el padre (ejecuta `execvp` con el comando `argv[1]`, si no hay argumento termina el programa) => cada ejecucion de `./a.out` crea un padre, pero este se reemplaza con `execvp` por lo que no hay padres acumulados, solo 1 padre activo por ejecucion (que luego desaparece) y cada ejecucion crea 1 hijo que permanece vivo despues de que el padre termina, por lo que hay 7 hijos. (idk)
+
+### Files Descriptors
+
+0) `stdin`: Entrada estándar (teclado o redirección desde otro archivo/comando).
+
+1) `stdout`: Salida estándar (consola o redirección a un archivo).
+
+2) `stderr`: Salida de error (consola o redirección a un archivo).
+
 ---
