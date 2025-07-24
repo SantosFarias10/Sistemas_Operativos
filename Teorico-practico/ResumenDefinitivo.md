@@ -214,6 +214,26 @@ Por ejemplo: Permite utilizar una pipe (|) en shell para redireccionar (usando `
 
 Con la nocion de usuario se limita quien gana control sobre los recursos del sistema y quien puede controlar todos los procesos, o solo los propios (por razones de seguridad).
 
+#### Conceptos Importantes!!!!
+
+* **System Call**:
+
+    - `fork()` es una **system call** usada para crear un proceso nuevo. Este proceso nuevo es una copia casi exacta del proceso que lo llamamos ("El padre"). El proceso nuevo ("El hijo"), no empieza en el main del padre, si no que empieza a partir de donde se llamo `fork()` en el padre. El padre recive de `fork()` el **PID** del hijo, a el hijo recive de `fork()` un cero. `fork()` imprime $2^{n}$ con `printf("a")` n cantidades de `fork()`.
+
+    - `wait()` es la función que utiliza un proceso padre para esperar a que su proceso hijo termine de ejecutarse, "entra en modo zombie". Una vez termina de ejecutarse y vuelve `wait()`, se termina de ejecutar el padre.
+
+    - `exec(const char *path, char *const argv[])` se usa para que un proceso hijo se diferencie, o ejecute un programa diferente al del padre. Simplemente toma el nombre de un ejecutable y algunos argumentos, carga su código de ese ejecutable y sobreescribe el código correspondiente al segmento del hijo. Este NO crea un proceso nuevo, solo lo transforma. Una llamada correcta de `exec()` nunca vuelve.
+
+    - `execvp(const char *file, char *const argv[])`: El primer argumento es el nombre *file* del programa (se busca en el *path* actual), el segundo argumento es un array de punteros a los argumentos.
+
+    - `execv()`: El primer argumento es el *path* al programa, el segundo argumento es un array de punteros a los argumentos, terminado en `null`.
+
+    - `execl()`: se pasan los argumentos como una lista explicita en la llamada, uno por uno, terminando con `null`.
+
+    - `kill()` se usa para mandar *signals* a un proceso, incluyendo directivas para pausar, matar y otros imperativos utiles.
+
+    - `signal()` se usa en un proceso para "agarrar" varias signals.
+
 ---
 
 ### Capitulo 6: Ejecucion Directa Limitada (LDE)
@@ -308,6 +328,30 @@ Para que no ocurran *interrupts* simultaneas, se suelen deshabilitar las interru
 
 En LDE se ejecuta **Directamente** al programa en el CPU, habiendo configurado antes al hardware para poder **Limitar** lo que cada proceso puede ejecutar, y habiendo el SO preparado a la CPU configurando al momento del boot al controlador de **Traps** y al **Timer** de interrupciones, y luego ejecutando procesos solo en **Modo** restringido.
 
+#### Conceptos Importantes!!!!
+
+* **Limited Direct Execution** o **Ejecución Directa Limitada**, la parte de "Direct Execution" se refiere a ejecutar sea cual sea el programa directamente en la CPU. La parte de "Limited" se refiere a NO dejar que cualquier proceso se apodere de la CPU indefinidamente o que realicen una instrucción ilegal.
+
+* **User mode**, todo código que corra en este modo esta restringido en las instrucciones que puede realizar.
+
+* **Kernel mode**, es donde corre el SO. Los programas que corren en este modo pueden realizar lo que quieran incluyendo operaciones privilegiadas.
+
+* **System calls**, permiten al kernel exponer cuidadosamente partes claves de funcionalidad a programas en el modo usuario. Para ejecutar una syscall, el programa ejecuta una instrucción **"Trap"**, que salta al kernel mode. Al terminar de ejecutar la syscall, se vuelve al user mode con una **"return from trap"** instrucción. Al realizar el trap y return from trap se guardan y leen los registros PC, entre otros registros del proceso hasta el **Kernel Stack**.
+
+* Hay dos fases en el Protocolo Ejecución Directa Limitada:
+    
+    1. **"Al Bootear"**, el kernel inicializa la **trap table** y la CPU recuerda la ubicación de los **trap handlerss** para su futuro uso.
+    
+    2. **"Al correr un proceso"**, el kernel realiza algunas cosas antes de realizar un return from trap para iniciar la ejecución de un proceso.
+
+* `yield()` es una syscall que transfiere el control de la CPU al SO.
+
+* **Non-Cooperative Approach** o **Enfoque no cooperativo**, es cuando el SO tiene formas de recuperar la CPU, ya sea con **timers interrupts** u otros tipos de interrupciones o cuando los procesos llaman a una syscall.
+
+* Un **Timer Interrupts** es una interrupción programable para realizarce cada cierto tiempo, en general milisegundos una vez ocurrido el interrupt, el proceso se detiene, y un interrupt hendler pre-configurada en el SO se ejecuta.
+
+* **Cooperative Approach** o **Enfoque cooperativo**, es cuando el SO no tiene forma de recuperar la CPU de un proceso, a menos que se realice un `yield()` u otras syscall o que termine el proceso.
+
 ---
 
 ### Capitulo 7: Planificacion de la CPU
@@ -390,6 +434,42 @@ De esta forma, se utiliza con mas eficiencia el CPU, suponiendo cortos periodos 
 
 Si olviamos la suposicion (5), normalmente no se sabe la longitud de un proceso. Sin esto *SJF* y *STCF* no funcionan bien.
 
+#### Conceptos Importantes!!!!
+
+* El **Scheduler** es el encargado de elegir si un proceso sigue corriendo o se cambia a otro proceso. De elegir cambiar de proceso, el SO ejecuta un **Context Switch**, basicamente el SO guarda los valores de registros del proceso en ejecución y lee los valores de registros del proceso a ejecutarse.
+
+* Hay dos tipos de saves/restore de registros.
+
+    1. Es cuando ocurre un timer interrupts, los user registers del proceso en ejecución son implicitamente guardados por el hardware, usando el kernel stack del proceso.
+    
+    2. Ocurre cuando el SO decide cambiar de proceso A al B, donde los kernel registers son explicitamente guardados por el software, pero en la memoria de la estructura del proceso.
+
+* **Workload** se le dice al proceso corriendo actualmente en el sistema.
+
+* **Turnaround Time** o **Tiempo de entrega**, es el tiempo en el que un proceso/trabajo se completa, menos el tiempo en el que el trabajo llega al sistema ($$T_{entrega} = T_{finalizacion} - T_{llegada}$$). Es una metrica de performance.
+
+* **FIFO**, el proceso que primero llega, es el primero que termina de ejecutarse.
+
+* **SJF**, un caso extra del FIFO, donde de un conjunto de procesos que llegan al mismo tiempo, se ejecuta el que se ejecuta mas rapido hasta el que se ejecuta mas lento, osea el que tiene menos tiempo de ejecución primero.
+
+* **NON-Preemtive** schedulers o planificador **no apropiativo**, corren un proceso hasta completarlo, para recien ahi considerar si ejecutar otro proceso.
+
+* **Preemptive** scheduler o planificador **apropiativo**, frenan un proceso para ejecutar otro en particular, el scheduler puede realizar un context switch.
+
+* Un SJF es un scheduler non-preemptive. Hacerlo preemptive un SJF es un **STCF**, el cual al ingresar procesos al sistema, analiza si son más cortos para dejar o cambiar el proceso que se esta ejecutando.
+
+* **Response time** o **Tiempo de respuesta**, es el tiempo en el que un proceso se ejecuta por primera vez, menos el tiempo en el que llega al sistema. ($$T_{respuesta} = T_{1ra-ejecución} - T_{llegada}$$).
+
+* **Roun Robin** (RR), ejecuta un proceso por un time slice o **Quantum**, al terminarse ese quantum se cambia a otro proceso. Repitiendo esos pasos hasta que se terminen todos. Con un quantum razonable, es un exelente scheduler de response time y malo de turnaround time.
+
+* Tenemos dos tipos de scheduler:
+
+    1. (SJF, STCF) optimizan el turnaround time a coste del response time.
+
+    2. (RR) optimiza el ronsponse time a coste del turnaround time.
+
+* **Overlaping** o **Superposición**, es cuando se ejecuta un proceso A, mientras un proceso B que se venia ejecutando de antes, se bloquea por una operación I/O.
+
 ---
 
 ### Capitulo 8: Cola Multinivel con Retroalimentacion (*MLFQ*)
@@ -440,6 +520,32 @@ Las reglas de la *MLFQ* consisten en:
 
 * **MLFQ**: *Multi-Level Feedback Queue*, (quantum, response).
 
+#### Conceptos Importantes!!!!
+
+* **Multi-level Feedback Queue** (MLFQ), este scheduler intenta optimizar el turnaround time y minimizar el reponse time. Utilizando una Queue de prioridades. Al tener un proceso con la misma prioridad, se ejecuta en forma RR.
+
+* **Allotment** o **Tiempo Asignado** es la cantidad de tiempo que un proceso puede usar en una prioridad, antes de que el scheduler se la reduzca.
+
+* **Starvation** o **Inanición** o **morir de hambre**. Sucede cuando hay muchos proceso interactivos que en conjunto consumento todo el CPU time, opacando a los proceso de larga duración sin recivir CPU time. **Game the scheduler** es cuando se encuentra una forma de engañar al scheduler para aprovecharse.
+
+* Concluimos con 5 reglas de la MLFQ:
+
+    1. Si Prio(A) > Prio(B) => A se ejecuta y B no.
+
+    2. Si Prio(A) = Prio(B) => A y B se ejecutan en RR.
+
+    3. Al entrar un proceso al sistema, se posiciona en la prioridad mas alta.
+
+    4. Si un proceso utiliza todo su allotment en un nivel de prioridad, se le reduce de prioridad.
+
+    5. Al cabo de un tiempo `S`, todos los procesos del sistema se mueven a la prioridad mas alta.
+
+* **Wall time**, es el tiempo de reloj que pasa.
+
+* **user time**, es el tiempo en el modo usuario.
+
+* **system time**. es el tiempo en el modo kernel.
+
 ---
 
 ## Virtualizacion de Memoria
@@ -481,6 +587,16 @@ El trabajo del SO es virtualizar la memoria. Para hacerlo bien, debe cumplir 3 o
 2. **Eficiencia**: La virtualizacion debe ser lo mas eficiente posible en terminos de tiempo y espacio. Para esto el SO utiliza distintas caracteristicas del hardware, como la TLB.
 
 3. **Proteccion**: El SO debe proteger los procesos unos de otros, asi como proteger al SO de los procesos. Para eso aisla a la memoria de los procesos (solo pueden acceder a su address space) para que no puedan interferir entre si, permitiendo por ejemplo, que uno falle sin que afecte al resto.
+
+#### Conceptos Importantes!!!!
+
+* **Espacio de direcciones**, es el espacio del programa en ejecución. Contiene todo el estado de memoria del programa en ejecución:
+
+    - El código del programa.
+
+    - El **Stack**, mantiene un seguimiento de donde se encuentra en la cadena de llamada de funciones, asi como también para asignar variables locales, pasar parametros y devolver valores.
+
+    - El **Heap**, es usado para asignaciones dinamicas, manejo de memoria del usuario, como las que deberia recibir de una llamada `malloc()`.
 
 ---
 
@@ -527,6 +643,23 @@ Algunos lenguajes tienen un manejo de memoria automatico (**Garbage Collector**)
 * Liberar memoria repetidamente: **Double Free**. Los programas pueden intentar liberar memoria mas de una vez, lo cual genera comportamientos indefinidos o crasheos.
 
 * Llamar a `free()` incorrectamente: **Free Incorrectly**. `free()` solo espera que se le pase como argumento un puntero devuelto por `malloc()`. Con cualquier otro valor o argumento el `free()` es invalido.
+
+#### Conceptos Importantes!!!!
+
+* `malloc()`, consulta por espacio en el heap pasando el tamaño, y cualquier caso te devuelve un puntero, al nuevo espacio asignado, si falla devuelve `NULL`. El unico parametro que toma es del tipo `size_t` el cual solamente describe cuantos bytes necesitas.
+
+
+* `free()`, libera memoria del heap. Toma como argumentos un puntero retonado por `malloc()`.
+
+* `malloc()` y `free()` NO son syscalls pero si son librery calls, pero estan construidas por algunas system calls.
+
+* `brk`, es usada para cambiar la locación de quiebre del programa: la ubicación del final del heap. Toma como argumento la dirección del nuevo final, e incrementa o decrementa el tamaño del heap.
+
+* `mmap()`, crea una región de memoria **anonima** en tu programa. Esta memoria puede ser tratada como un heap y manejada igual.
+
+* `calloc()` asigna memoria y las inicia en cero antes de retornarla.
+
+* `realloc()` reserva una region de memoria nueva mas grande, copia el contenido de la region vieja, y retorna el puntero a la nueva region.
 
 ---
 
@@ -606,6 +739,24 @@ Usando las herramientas proporcionadas por el hardware, el SO logra la virtualiz
 
 3. **Definicion de los Exception Handler (manejo de excepciones)** en el momento de booteo, para luego ser ejecutado en caso de accesos a memoria ilegal (errores **Out Of Bounds**; fuera de rango) o intentos de uso de instrucciones privilegiadas.
 
+#### Conceptos Importantes!!!!
+
+* **traducción de direcciones**, redirige referencia de memoria del programa a la ubicación real en memoria. Transofrma una dirección virtual en una dirección física es la tecnica a la que nos referimos.
+
+* **base-limite**, este par nos permite ubicar en el espacio de direcciones en cualquier lugar que querramos de la memoria física. El limite esta para ayudar con la protección. El proceso verifica que la memoria referenciada este dentro de los limites para asegurarse que es legal.
+
+* Cuando cualquier referencia a memoria es generada por el proceso, es traducida por el procesador como: La Dirección Física va a ser igual a Dirección virtual más la base (Physical addres = virtual address + base). Cada referencia de memoria generada por el proceso es una **Dirección Virtual**, el hardware agrega el contenido del registro base a esa dirección y el resultado es una **Dirección Física**.
+
+* Dado que la reubicación de la dirección sucede en tiempo de ejecución, y dado que podemos mover el espacio de direcciones incluso después de que el proceso comienza a ejecutarse, esta tecnica a veces es conocida como **reubicación dinámica**.
+
+* **Memomry management ubit** (MMU) o **Unidad de administración de memoria**, es donde viven los registros base y limite.
+
+* El SO corre en Modo privilegiado o modo kernel, donde tiene acceso a la máquina entera.
+
+* Las aplicaciones corren en modo usuario, donde estan limitados en que pueden hacer.
+
+* **Instrucciones Privilegiadas**, intrucciones especiales para modificar los registros base y limite, permitiendole al SO modificarlo cuando se ejecutan diferente procesos. Solo en modo kernel pueden modificarse los registros.
+
 ---
 
 ### Capitulo 17: Gestion de Espacio Libre
@@ -657,6 +808,7 @@ El allocator ideal es rapido, eficiente enn el uso del espacio (minimizando frag
 2. **Worst Fit**:
 
     * Se busca al bloque mas **Grande** disponible, se usa el espacio necesario, y se devuelve lo restante a la free list. Genera los mismos **Overheads** al realizar tambien una busqueda **Exhaustiva** (fragmentando esta vez en bloques libres mas grandes).
+
 3. **First Fit**:
 
     * Usa el **Primer** bloque de la lista lo suficientemente grande para cumplir con lo solicitado. Su ventaja es la **Velocidad** ya que evita realizar una busqueda Exhaustiva, pero "**Contamina**" el **comienzo** de ka free list al concentrar alli la fragmentacion en bloques pequeños.
@@ -676,6 +828,26 @@ El allocator ideal es rapido, eficiente enn el uso del espacio (minimizando frag
     * Tanto la memoria libre como la memoria que se asigna son espacios de tamaño $$2^{N}$$. Cuando se solicita un **Bloque**, se divide el espacio libre por 2 hasta encontrar uno que satisfaga el pedido.
 
     * Cuando un bloque se libera se chequea que su "buddy" del mismo tamaño este libre, y si lo esta los combina, y asi recursivamente hasta coalescing (Unir bloques de memoria libres contiguos en uno solo mas grande) de todo o encontrar un "buddy" en uso; simplificar el **Coalescing** pero genera **Fragmentacion Interna**.
+
+#### Conceptos Importantes!!!!
+
+* **Fragmentación externa**, el espacio libre es cortado en pequeñas piezas de diferentes tamaños, peticiones subsecuentes pueden fallar a causa de no tener espacio libre contiguo que pueda satisfacer la petición.
+
+* **free list**, es una estructura que contiene referencias a todos los chunks libres del espacio de la región de memoria administrada.
+
+* **Fragmentación interna**, es cuando un asignado recibe chunks de memoria mas grande de los que pidio.
+
+* **División** Encontrara un chunk libre de memoria que pueda satisfacer la petición y lo dividira en dos. El primer chunk lo retornara al que hizo la petición; y el segundo permanecera en la free list.
+
+* **Fusión**, fusiona el espacio libre cuando un chunk de memoria es liberado. Mira cuidadosamente que esta retornado y a los chunk libres cercanos; si el nuevo espacio libre esta al lado de un chunk libre, los ordena en un solo chunk mas grande.
+
+* **Best fit**: Primero, buscamos a traves de la free list y encontramos chunks de memoria libre que sean igual o más grande que el tamaño pedido. Entonces, retornamos el más chico de ese grupo de candidatos.
+
+* **Worst fist**: Encuentra el chunk mas grande y devuelve la cantidad solicitada; mantiene el resto del chunk en la free list. Intenta dejar grandes chunks libres en vez de muchos chunks chicos.
+
+* **First fit**: Encuentra el primer bloque de memoria que sea suficientemente grande retorna la cantidad pedida al usuario.
+
+* **Next fit**: Mantiene un puntero adicional a la ubicación dentro del lista donde se miró por última vez. La idea es repartir las búsquedas de espacio libre por toda la lista de forma mas uniforme, evitando así fragmentación.
 
 ---
 
@@ -739,6 +911,34 @@ La paginacion requiere que se realice una referencia a memoria extra para buscar
 
 Cuando corre, cada instruccion fetcheada genera dos referencias de memoria; una a la page table para encontrar el physical frame en la que la instruccion reside, y otra a la instruccion en si misma para poder fetchearla hacia la CPU.
 
+#### Conceptos Importantes!!!!
+
+* **Paginación**, Divide el espacio de direcciones de un proceso en unidades de tamaño fijo, llamadas **paginas**.
+
+* La memoria física se ve como un array de slot de tamaño fijo llamado **page frame**, cada uno puede contener una sola pagina de memoria virtual.
+
+* **Page table**, guarda traducciones de direcciones para cada pagina virtual del espacio de direcciones, permitiendo saber en que lugar de la memoria física esta cada pagina. Es una estructura de datos por proceso, si otro proceso se ejecuta, el SO debe tener una page table para el, dado que sus paginas mapean a diferentes lugares físicos.
+
+* **Virtual Page Number** (VPN), es el número de pagina virtual en un esquema de memoria virtual. Se usa para identificar una página en el espacio de direcciones virtuales de un proceso antes de ser traducido a una dirección física.
+
+* **Page Frame Number** (PFN) o **Page Physical Number** (PPN), es el identificador que asigna el SO a cada **frame** o bloque de memoria física.
+
+* **Page Table Entry** (PTE), es cada una de las entradas de la page table que utiliza el SO para gestionar la traducción de direcciones virtuales a direcciones físicas. Cada PTE contiene la información necesaria para mapear una pagina virtual a un frame de memoria física.
+
+* **Page table lineal**, es una page table la cual es solo un array. El SO indexa el array por el VPN, y mira el PTE en el indeice para encontrar el PFN deseado.
+
+* El contenido de cada PTE:
+    
+    - **Valid bit** es comun para indicar si la traducción particular es valida.
+    
+    - **Protection bits**, indica ya sea si la pagina puese ser leida, escrita o ejecutada.
+    
+    - **Present bit** indica si la pagina esta en la memoria física o en el disco.
+    
+    - **Dirty bit**, indica si una pagina ha sido modificada desde que llego a la memoria.
+    
+    - **Reference bit** (a.k.a. **Accessed bit**) es usada para rastrear si una pagina ha sido accedida, es util para determinar que pagina son populares, y por lo tanto deverian mantenerse en la memoria.
+
 ---
 
 ### Capitulo 19: Traducciones Mas Rapidas (TLB)
@@ -798,6 +998,24 @@ Frente a esto, algunos sistemas se apoyan en el hardware al añadir un **Address
 #### Politicas de Reemplazos
 
 Las memorias cache son veloces pero pequeñas. Si para insertar una nueva entrada en la TLB es necesario reemplazar una vieja, se debe elegir una politica para realizar ese **Cache Replacement**. La idea siempre es bajar el porcentaje de TLB miss; puede elegirse borrar la que mas tiempo lleva sin usarse (**LRU**: *Least Recently Used*) para tratar de mantener la localidad temporal, o simplemente borrar una **Aleatoria**, que no presenta casos borde como LRU (por ejemplo: ante un recorrido en loop de un array que no entre en la TLB).
+
+#### Conceptos Importantes!!!!
+
+* **Translation-Lookaside Buffer** (TLB) es parte de la MMU, es simplemente una **cache** de hardware de traducciones populares de direcciones virtuales a físicas.
+
+* **TLB hit**, es cuando la TLB tiene la traducción para un VPN.
+
+* Si la CPU no encuentra la traducción en la TLB tenemos un **TLB miss**, por lo que el hardware tiene que acceder a la page table para encontrar la traducción, esta acción es costosa, por lo que es mas lento que un TLB hit. Finalmente, actualiza la TLB, el hardware reintenta la instrucción; esta vez, la traducción esta en el TLB, y la referencia a memoria se hace rapido.
+
+* En un TLB tipico debe ser **Completamente Asociativo**. Esto significa que cualquier traducción dada puede estar en cualquier lugar de la TLB, y que el hardware basca en todo el TLB en paralelo para encontrar la traducción deseada.
+
+* El TLB comunmente tiene:
+
+    - **Valid bit** el cual dice si la entrada tiene una traduccion valida o no.
+
+    - **Protection bit**, los cuales indican como puede ser accedida una page table.
+
+* **Space identifier** (ASID) es como un PID, pero tiene menos bits. Diferencia cualquier traducción identica.
 
 ---
 
@@ -881,253 +1099,7 @@ Page Directory ahora con un ancho de 64 bits (al igual que la direccion virtual)
 
 Notar que al ser 9/9/9/12 usa los bits menos significativos de los 64 ahora disponible (los restantes son bits EXT de extension).
 
----
-
-# Concetos importantes
-
-## Virtualizacion
-
-* **Proceso** es un programa en ejecución. Lo constituye lo que llamamos **Machine state** o **Máquina de estado**, donde se encuentra la **Memoria**, la memoria que el proceso puede acceder llamada **address spaces** o **Espacio de direcciones**. Los **Registros**, algunos importantes como por ejemplo el PC (*Program Counter*) que nos dice que instrucción es la siguiente en ejecutar, del programa el **Stack Pointer**, se usa para manejar la pila de los parametros de funciones, variables locales, return address. También tienen la información I/O.
-
-* Lo que debe incluirse en cualquier interfaz de un SO, Estas APIs, estan disponibles en cualquier SO:
-
-    - **Crear**: Metodo para crear nuevos procesos.
-
-    - **Destruir**: Metodo para destruir un proceso / Forzar la detencion de un proceso.
-
-    - **Esperar**: Metodo para esperar un proceso.
-
-    - **Controles varios**: Por ejemplo: Metodo para suspender un proceso por un tiempo y, detener su ejecucion y despues continuar ejecutandolo.
-
-    - **Estado**: Metodo para obtener informacion de estado de un proceso.
-
-* Los proceso pueden estar en diferentes **Estados**:
-
-    - **Running** es el estado con el control de la CPU.
-
-    - **Ready** son los procesos en espera para usar la CPU.
-
-    - **Blocked** puede ser cuando un proceso espera una interacción con algun I/O.
-
-![Figure 4.2](../Teorico-practico/imagenes/Figure4_2.png)
-
-* Cuando queremos ejecutar mas de un proceso a la vez. El SO crea una ilusion **Virtualizando** la CPU. Esto lo logra ejecutando un proceso, luego deteniendolo y ejecutando otro, y asi sucesivamente, el SO puede crear la ilusion de que existen muchas CPUs virtuales cuando en realidad hay solo una CPU fisica. Esta tecnica es conocida como **Tiempo Compartido** de la CPU, permite a los usuarios ejecutar tantos procesos concurrentes como deseen.
-
-* Para implementar la virtualizacion de la CPU, el SO necesitara maquinaria de bajo nivale a la que llamaremos **Mecanismo**; son metodos o protocolos de bajo nivel que implementan una parte de la funcionalidad necesaria. Por ejemplo: context switch.
-
-* Encima de estos mecanismos reside parte de la inteligencia del SO, en forma de **Politicas**. Son algoritmos para tomar algun tipo de decision dentro del SO. Por ejemplo: las politicas de planificacion.
-
-* La contrapartida del tiempo compartido es el **Espacio Compartido**, donde un recurso se divide (en el espacio) entre aquellos que deseen utilizarlo.
-
-* System Call**:
-
-    - `fork()` es una **system call** usada para crear un proceso nuevo. Este proceso nuevo es una copia casi exacta del proceso que lo llamó ("El padre"). El proceso nuevo ("El hijo"), no empieza en el main del padre, si no que empieza a partir de donde se llamo `fork()` en el padre. El padre recive de `fork()` el **PID** del hijo, a el hijo recive de `fork()` un cero. `fork()` imprime $2^{n}$ con `printf("a")` n cantidadedes de `fork()`.
-
-    - `wait()` es la función que utiliza un proceso padre para esperar a que su proceso hijo termine de ejecutarse, "entra en modo zombie". Una vez termina de ejecutarse y vuelve `wait()`, se termina de ejecutar el padre.
-
-    - `exec(const char *path, char *const argv[])` se usa para que un proceso hijo se diferencie, o ejecute un programa diferente al del padre. Simplemente toma el nombre de un ejecutable y algunos argumentos, carga su código de ese ejecutable y sobreescribe el código correspondiente al segmento del hijo. Este NO crea un proceso nuevo, solo lo transforma. Una llamada correcta de `exec()` nunca vuelve.
-
-    - `execvp(const char *file, char *const argv[])`:  El primer argumento es el nombre file del programa (se busca en el path actual), el segundo argumento es un array de punteros a los argumentos.
-
-    - `execl()`: se pasan los argumentos como una lista explicita en la llamada, uno por uno, terminando con `null`.
-
-    - `kill()` se usa para mandar *signals* a un proceso, incluyendo directivas para pausar, matar y otros imperativos utiles.
-
-    - `signal()` se usa en un proceso para "agarrar" varias signals.
-
-    - `yield()` es una syscall que transfiere el control de la CPU al SO.
-
-* **Limited Direct Execution** o **Ejecución Directa Limitada**, la parte de "Direct Execution" se refiere a ejecutar sea cual sea el programa directamente en la CPU. La parte de "Limited" se refiere a NO dejar que cualquier proceso se apodere de la CPU indefinidamente o que realicen una instrucción ilegal.
-
-* **User mode**, todo código que corra en este modo esta restringido en las instrucciones que puede realizar.
-
-* **Kernel mode**, es donde corre el SO. Los programas que corren en este modo pueden realizar lo que quieran incluyendo operaciones privilegiadas.
-
-* **System calls**, permiten al kernel exponer cuidadosamente partes claves de funcionalidad a programas en el modo usuario. Para ejecutar una syscall, el programa ejecuta una instrucción **"Trap"**, que salta al kernel mode. Al terminar de ejecutar la syscall, se vuelve al user mode con una **"return from trap"** instrucción. Al realizar el trap y return from trap se guardan y leen los registros PC, entre otros registros del proceso hasta el **Kernel Stack**.
-
-* Hay dos fases en el Protocolo Ejecución Directa Limitada:
-
-    1. **"Al Bootear"**, el kernel inicializa la **trap table** y la CPU recuerda la ubicación de los **trap handlerss** para su futuro uso.
-
-    2. **"Al correr un proceso"**, el kernel realiza algunas cosas antes de realizar un return from trap para iniciar la ejecución de un proceso.
-
-* **Non-Cooperative Approach** o **Enfoque no cooperativo**, es cuando el SO tiene formas de recuperar la CPU, ya sea con **timers interrupts** u otros tipos de interrupciones o cuando los procesos llaman a una syscall.
-
-* Un **Timer Interrupts** es una interrupción programable para realizarce cada cierto tiempo, en general milisegundos una vez ocurrido el interrupt, el proceso se detiene, y un interrupt hendler pre-configurada en el SO se ejecuta.
-
-* **Cooperative Approach** o **Enfoque cooperativo**, es cuando el SO no tiene forma de recuperar la CPU de un proceso, a menos que se realice un `yield()` u otras syscall o que termine el proceso.
-
-* El **Scheduler** es el encargado de elegir si un proceso sigue corriendo o se cambia a otro proceso. De elegir cambiar de proceso, el SO ejecuta un **Context Switch**, basicamente el SO guarda los valores de registros del proceso en ejecución y lee los valores de registros del proceso a ejecutarse.
-
-* Hay dos tipos de saves/restore de registros:
-
-    1. Es cuando ocurre un timer interrupts, los user registers del proceso en ejecución son implicitamente guardados por el hardware, usando el kernel stack del proceso.
-
-    2. Ocurre cuando el SO decide cambiar de proceso A al B, donde los kernel registers son explicitamente guardados por el software, pero en la memoria de la estructura del proceso.
-
-* **Workload** se le dice al proceso corriendo actualmente en el sistema.
-
-* **Turnaround Time** o **Tiempo de entrega**, es el tiempo en el que un proceso/trabajo se completa, menos el tiempo en el que el trabajo llega al sistema ($T_{entrega} = T_{finalizacion} - T_{llegada}). Es una metrica de performance.
-
-* **Response time** o **Tiempo de respuesta**, es el tiempo en el que un proceso se ejecuta por primera vez, menos el tiempo en el que llega al sistema. ($T_{respuesta} = T_{1ra-ejecución} - T_{llegada}).
-
-* **NON-Preemtive** schedulers o planificador **no apropiativo**, corren un proceso hasta completarlo, para recien ahi considerar si ejecutar otro proceso.
-
-* **Preemptive** scheduler o planificador **apropiativo**, frenan un proceso para ejecutar otro en particular, el scheduler puede realizar un context switch.
-
-* Tipos de Planificadores:
-
-    - **FIFO**, el proceso que primero llega, es el primero que termina de ejecutarse.
-
-    - **SJF**, un caso extra del FIFO, donde de un conjunto de procesos que llegan al mismo tiempo, se ejecuta el que se ejecuta mas rapido hasya el que se ejecuta mas lento, osea el que tiene menos tiempo de ejecución primero.
-
-        * Un SJF es un scheduler non-preemptive. Hacerlo preemptive un SJF es un **STCF**, el cual al ingresar procesos al sistema, analiza si son más cortos para dejar o cambiar el proceso que se esta ejecutando.
-
-    - **Roun Robin** (RR), ejecuta un proceso por un time slice o quantum, al terminarse ese quantum se cambia a otro proceso. Repitiendo esos pasos hasta que se terminen todos. Con un quantum razonable, es un exelente scheduler de response time y malo de turnaround time.
-
-    - **Multi-level Feedback Queue** (MLFQ), este scheduler intenta optimizar el turnaround time y minimizar el reponse time. Utilizando una Queue de prioridades. Al tener un proceso con la misma prioridad, se ejecuta en forma RR.
-
-        1. Si Prio(A) > Prio(B) => A se ejecuta y B no.
-        
-        2. Si Proo(A) = Prop(B) => A y B se ejecutan en RR.
-
-        3. Al entrar un proceso al sistema, se posiciona en la prioridad mas alta.
-
-        4. Si un proceso utiliza todo su allotment en un nivel de prioridad, se le reduce de prioridad.
-
-        5. Al cabo de un tiempo S, todos los procesos del sistema se mueven a la prioridad mas alta.
-
-* Tenemos dos tipos de scheduler:
-
-    1. (SJF, STCF) optimizan el turnaround time a coste del response time.
-
-    2. (RR) optimiza el ronsponse time a coste del turnaround time.
-
-* **Overlaping** o **Superposición**, es cuando se ejecuta un proceso A, mientras un proceso B que se venia ejecutando de antes, se bloquea por una operación I/O.
-
-* **Allotment** o **Tiempo Asignado** es la cantidad de tiempo que un proceso puede usar en una prioridad, antes de que el scheduler se la reduzca.
-
-* **Starvation** o **Inanición** o **morir de hambre**. Sucede cuando hay muchos proceso interactivos que en conjunto consumento todo el CPU time, opacando a los proceso de larga duración sin recivir CPU time. **Game the scheduler** es cuando se encuentra una forma de engañar al scheduler para aprovecharse.
-
-* **Wall time**, es el tiempo de reloj que pasa.
-
-* **user time**, es el tiempo en el modo usuario.
-
-* **system time**. es el tiempo en el modo kernel.
-
-*  WallTime >= CPUTime: Cuando el proceso se ejecuta en un solo nucleo o en multiples nucleos pero sin paralelismo (un nucleo alternado entre varios hilos).
-
-*  WallTime < CPUTime: Puede llegar a suceder si el proceso se ejecuta en multiples nucleos simultaneamente (paralelismo), ya que el CPU time se suma en cada nucleo que esta en uso.
-
-*  UserTime < WallTime: El proceso parte del tiempo esperando: ya sea I/O, bloqueado, o al return del trap cuando hace una System Call y pasa a modo kernel.
-
-*  UserTime = WallTime: Un proceso sin hilos se ejecuta en modo usuario, sin interrupciones ni operaciones de I/O, sin llamadas al sistema, y no se bloquea ni o sufre Context Switches.
-
-*  UserTime > WallTime: Proceso multihilo, en el que cada hilo ejecuta en un core distinto y luego se suman todos sus tiempos de usuario.
-
-* **Espacio de direcciones**, es el espacio del programa en ejecución. Contiene todo el estado de memoria del programa en ejecución:
-
-    - El código del programa.
-
-    - El **Stack**, mantiene un seguimiento de donde se encuentra en la cadena de llamada de funciones, asi como tambén para asignar variables locales, pasar parametros y devolver valores.
-    
-    - El **Heap**, es usado para asignaciones dinamicas, manejo de memoria del usuario, como las que deberia recibir de una llamada `malloc()`.
-
-* `malloc()`, consulta por espacio en el heap pasando el tamaño, y cualquier caso te devuelve un puntero, al nuevo espacio asignado, si falla devuelve `NULL`. El unico parametro que toma es del tipo `size_t` el cual solamente describe cuantos bytes necesitas.
-
-* `free()`, libera memoria del heap. Toma como argumentos un puntero retonado por `malloc()`.
-
-* `malloc()` y `free()` NO son syscalls pero si son librery calls, pero estan construidas por algunas system calls.
-
-* `brk`, es usada para cambiar la locación de quiebre del programa: la ubicación del final del heap. Toma como argumento la dirección del nuevo final, e incrementa o decrementa el tamaño del heap.
-
-* `mmap()`, crea una región de memoria **anonima** en tu programa. Esta memoria puede ser tratada como un heap y manejada igual.
-
-* `calloc()` asigna memoria y las inicia en cero antes de retornarla.
-
-* `realloc()` reserva una region de memoria nueva mas grande, copia el contenido de la region vieja, y retorna el puntero a la nueva region.
-
-* **Traducción de direcciones**, redirige referencia de memoria del programa a la ubicación real en memoria. Transofrma una dirección virtual en una dirección física es la tecnica a la que nos referimos.
-
-* **base-limite**, este par nos permite ubicar en el espacio de direcciones en cualquier lugar que querramos de la memoria física. El limite esta para ayudar  con la protección. El proceso verifica que la memoria referenciada este dentro de los limites para asegurarse que es legal.
-
-* Cuando cualquier referencia a memoria es generada por el proceso, es traducida por el procesador como: La Dirección Física va a ser igual a Dirección virtual más la base (Physical addres = virtual address + base). Cada referencia de memoria generada por el proceso es una **Dirección Virtual**, el hardware agrega el contenido del registro base a esa dirección y el resultado es una **Dirección Física**.
-
-* Dado que la reubicación de la dirección sucede en tiempo de ejecución, y dado que podemos mover el espacio de direcciones incluso después de que el proceso comienza a ejecutarse, esta tecnica a veces es conocida como reubicación dinámica.
-
-* **Memomry management ubit** (MMU) o **Unidad de administración de memoria**, es donde viven los registros base y limte.
-
-* El SO corre en Modo privilegiado o modo kernel, donde tiene acceso a la máquina entera.
-
-* Las aplicaciones corren en modo usuario, donde estan limitados en que pueden hacer.
-
-* **Instrucciones Privilegiadas**, intrucciones especiales para modificar los registros base y limite, permitiendole al SO modificarlo cuando se ejecutan diferente procesos. Solo en modo kernel pueden modificarse los registros.
-
-* **Fragmentación externa**, el espacio libre es cortado en pequeñas piezas de diferentes tamaños, peticiones subsecuentes pueden fallar a causa de no tener espacio libre contiguo que pueda satisfacer la petición.
-
-* **free list**, es una estructura que contiene referencias a todos los chunks libres del espacio de la región de memoria administrada.
-
-* **Fragmentación interna**, es cuando un asignado recibe chunks de memoria mas grande de los que pidio.
-
-* **División** Encontrara un chunk libre de memoria que pueda satisfacer la petición y lo dividira en dos. El primer chunk lo retornara al que hizo la petición; y el segundo permanecera en la free list.
-
-* **Fusión**, fusiona el espacio libre cuando un chunk de memoria es liberado. Mira cuidadosamente que esta retornado y a los chunk libres cercanos; si el nuevo espacio libre esta al lado de un chunk libre, los ordena en un solo chunk mas grande.
-
-* Tipos de Gestion de espacio libre:
-
-    1. **Best fit**: Primero, buscamos a traves de la free list y encontramos chunks de memoria libre que sean igual o más grande que el tamaño pedido. Entonces, retornamos el más chico de ese grupo de candidatos.
-
-    2. **Worst fist**: Encuentra el chunk mas grande y devuelve la cantidad solicitada; mantiene el resto del chunk en la free list. Intenta dejar grandes chunks libres en vez de muchos chunks chicos.
-
-    3. **First fit**: Encuentra el primer bloque de memoria que sea suficientemente grande retorna la cantidad pedida al usuario.
-
-    4. **Next fit**: Mantiene un puntero adicional a la ubicación dentro del lista donde se miró por última vez. La idea es repartir las búsquedas de espacio libre por toda la lista de forma mas uniforme, evitando así fragmentación.
-
-    5. **Lista Segregadas**: Ante apliciones que tengan peticiones Recurrentes de tamaño similar, se crea una nueva lista para el manejo de objetos de ese tipo, y se envian las demas peticiones al allocator general. La fragmentacion es menor y los pedidos de dicho tamaño se satisfacen mas rapido. Por ejemplo, el Slab Allocator asigna un numero de Object Caches para objetos del kernel que se solicitan seguido. Si le falta espacio pide mas slabs (bloques pequeños) de memoria. Este allocator tambien mantiene los free objects de las listas en un estado pre inicializado.
-
-    6. **Buddy Allocation**: Tanto la memoria libre como la memoria que se asigna son espacios de tamaño $$2^{N}$$. Cuando se solicita un Bloque, se divide el espacio libre por 2 hasta encontrar uno que satisfaga el pedido. Cuando un bloque se libera se chequea que su "buddy" del mismo tamaño este libre, y si lo esta los combina, y asi recursivamente hasta coalescing (Unir bloques de memoria libres contiguos en uno solo mas grande) de todo o encontrar un "buddy" en uso; simplificar el Coalescing pero genera Fragmentacion Interna.
-
-* **Paginación**, Divide el espacio de direcciones de un proceso en unidades de tamaño fijo, llamadas **paginas**.
-
-* La memoria física se ve como un array de slot de tamaño fijo llamado **page frame**, cada uno puede contener una sola pagina de memoria virtual.
-
-* **Page table**, guarda traducciones de direcciones para cada pagina virtual del espacio de direcciones, permitiendo saber en que lugar de la memoria física esta cada pagina. Es una estructura de datos por proceso, si otro proceso se ejecuta, el SO debe tener una page table para el, dado que sus paginas mapean a diferentes lugares físicos.
-
-* **Virtual Page Number** (VPN), es el número de pagina virtual en un esquema de memoria virtual. Se usa para identificar una página en el espacio de direcciones virtuales de un proceso antes de ser traducido a una dirección física.
-
-* **Page Frame Number** (PFN) o **Page Physical Number** (PPN), es el identificador que asigna el SO a cada **frame** o bloque de memoria física
-
-* **Page Table Entry** (PTE), es cada una de las entradas de la page table que utiliza el SO para gestionar la traducción de direcciones virtuales a direcciones físicas. Cada PTE contiene la información necesaria para mapear una pagina virtual a un frame de memoria física.
-
-* **Page table lineal**, es una page table la cual es solo un array. El SO indexa el array por el VPN, y mira el PTE en el indeice para encontrar el PFN deseado.
-
-* El contenido de cada PTE:
-
-    - **Valid bit** es comun para indicar si la traducción particular es valida.
-    
-    - **Protection bits**, indica ya sea si la pagina puese ser leida, escrita o ejecutada.
-    
-    - **Present bit** indica si la pagina esta en la memoria física o en el disco.
-    
-    - **Dirty bit**, indica si una pagina ha sido modificada desde que llego a la memoria.
-    
-    - **Reference bit** (a.k.a. **Accessed bit**) es usada para rastrear si una pagina ha sido accedida, es util para determinar que pagina son populares, y por lo tanto deverian mantenerse en la memoria.
-
-* **Translation-Lookaside Buffer** (TLB) es parte de la MMU, es simplemente una **cache** de hardware de traducciones populares de direcciones virtuales a físicas.
-
-* **TLB hit**, es cuando la TLB tiene la traducción para un VPN.
-
-* Si la CPU no encuentra la traducción en la TLB tenemos un **TLB miss**, por lo que el hardware tiene que acceder a la page table para encontrar la traducción, esta acción es costosa, por lo que es mas lento que un TLB hit. Finalmente, actualiza la TLB, el hardware reintenta la instrucción; esta vez, la traducción esta en el TLB, y la referencia a memoria se hace rapido.
-
-* En un TLB tipico debe ser **Completamente Asociativo**. Esto significa que cualquier traducción dada puede estar en cualquier lugar de la TLB, y que el hardware basca en todo el TLB en paralelo para encontrar la traducción deseada.
-
-* El TLB comunmente tiene:
-
-    - **Valid bit** el cual dice si la entrada tiene una traduccion valida o no.
-    
-    - **Protection bit**, los cuales indican como puede ser accedida una page table.
-
-* **Space identifier** (ASID) es como un PID, pero tiene menos bits. Diferencia cualquier traducción identica.
+#### Conceptos Importantes!!!!
 
 * **Page Directory**, es usada para que nos diga donde está una página de la page table o si toda la pagina de la page table contiene paginas no validas.
 
@@ -1141,7 +1113,7 @@ Notar que al ser 9/9/9/12 usa los bits menos significativos de los 64 ahora disp
 
 ---
 
-# Practico
+# Practica
 
 ## 1
 
@@ -1252,4 +1224,5 @@ dir: Marco Fisico, XWRV
 0x000: 0x0060D, XWRV
 -----------------------------
 ```
+
 ---
