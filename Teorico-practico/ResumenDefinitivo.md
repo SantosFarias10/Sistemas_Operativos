@@ -1362,4 +1362,499 @@ Cada ejecucion de `/a.out` se crea un hijo (manipula el archivo `./a.out`) y el 
 
 2) `stderr`: Salida de error (consola o redirección a un archivo).
 
+## 5 
+
+Secuencia de fotos en un heap de 4 KB. Solo una operacion ocurre entre fotos del heap. Complete el que corresponde, tache la otra. Se usa la estructura de datos de OSTEP, Capitulo 17: "Free Space Management". En el malloc debe dat el parametro de entrada y el valor del puntero de salida, en el free solo el valor del puntero de entrada. Escribir todo en decima. La base del heap es la direccion virtual 16 KB, o sea en Foto 0, head = 16384 y crece hacia abajo.
+
+![](../Teorico-practico/imagenes/ej5.png)
+
+=> La direccion base del heap (Foto 0): `head = 16384`
+
+=> El heap tiene un tamaño de `4 KB = 4096 bytes`, por lo que las direcciones van desde `16384` hasta `16384 + 4096 = 20480` (pero como crece hacia abajo, en realidad se resta => las direcciones van desde `16384` a `12288`).
+
+?????????????????????????????????????????????????????????????????????????
+
 ---
+
+## Concurrencia
+
+### Capitulo 26: Introduccion a la Concurrencia
+
+Se introduce una nueva abstracción para un proceso en ejecución: el hilo (**thread**). Un programa de **hilos-múltiples** (multi-threaded) tiene más de un punto de ejecución; cada hilo es un sub-proceso en sí mismo que avanza de manera asíncrona, pero compartiendo todos un mismo address space (comparten heap y code).
+
+Cada hilo mantiene su propio PC, registros y memoria stack (**thread local storage**), por lo que ante un cambio de contexto estos deben ser guardados y restaurados. Los diferentes bloques stack se almacenan en el mismo address space del proceso. Por ello, si el context switch es entre dos hilos del mismo proceso, se usa un **thread control block** (**TCB**) en lugar de un PCB, manteniendo address space y por tanto page table (las traducciones de la TLB todavía podrían servir), lo cual mejora el desempeño.
+
+#### Ventajas de usar hilos
+
+* **Paralelismo**: se puede dividir al trabajo en hilos, haciéndolo más rápido y eficiente (en caso de que el overhead no supere la ganancia). Convertir un programa **single-thread** (de un hilo) **multi-thread** es llamado **paralelización**.
+
+* Evitar **bloquear** un programa en **espera** de un **I/O** (lento); mientras un hilo espera, el CPU hace un **overlap** (superpone) de tareas y puede ejecutar otra del mismo programa.
+
+    * A diferencia de hacer **multiprogramming** (dividir una tarea en muchos procesos), al compartir address space es más fácil compartir información.
+
+#### Scheduling y Race Condition
+
+La ejecución de los procesos es administrada por el scheduler del SO, por lo que no se puede asumir que hilo se ejecutará en cada momento (incluso si uno es creado antes que otro); una vez llamado, cada uno se ejecuta de forma independiente a su caller hasta retornar. Esto aumenta la complejidad general del funcionamiento del sistema, por lo que es preferible intentar minimizar las interacciones entre ellos.
+
+Que diferentes hilos puedan compartir información puede dar lugar a errores. Por ejemplo, en el caso de dos hilos incrementando un contador común; el primer hilo puede modificado la variable, pero si antes de poder guardar el resultado un context switch guarda el estado actual del proceso y corre el hilo 2 (el cual modifica la variable y guarda en memori el nuevo valor) cuando vuelva a correr el hilo 1 este realizara la instrucción que anteriormente no pudo, guardando el valor del contador que él tenía, pisando el contenido y haciendo que el resultado sea diferente al esperado.
+
+Esto es llamado una **race condition** (o más bien **data race**, condición de carrera) y genera resultados **indeterministas**.
+
+Cuando más de un hilo ejecuta una misma parte del código que contiene un recurso compartido, (por ej. una variable o estructura de datos) y se genera una race condition, esa parte es llamada **sección crítica**. Como esas zonas no deberían ser ejecutadas al mismo tiempo por más de un hilo, se busca asegurar una **exclusión mutua** que garantice el acceso de solo un hilo a la vez
+
+#### Atomicidad
+
+Una solución que garantiza la exclusión mutua es tener instrucciones que, en un solo paso, se ejecuten por completo y remuevan así la posibilidad de un interrupt intermedio. Es decir, que sean **atómicas**; que o bien la instrucción se ejecute hasta completarse, o bien no se ejecute.
+
+En general esto no es posible, por lo que, usando soporte del hardware y del SO, se construyen diferentes **primitivas de sincronización**; código multi-thread en el que cada hilo accede a las secciones críticas de forma sincronizada y controlada, evitando las condiciones de  carrera y asegurando la exclusión mutua.
+
+#### Conceptos Importantes!!!!
+
+* **Theread** o **Hilo**: es como su fuera otro proceso separado, excepto por una diferencia, comparten el mismo espacio de direcciones y por lo tanto pueden acceder a los mismo datos. Tienen un PC que rastrea de donde esta obteniendo instrucciones el programa. Tienen sus propios set de registros privados que utilizada para calculos.
+
+* El context switch entre hilos es muy similar al context switch entre procesos. Con los procesos, guardabamos el estado en un bloque de control de procesos (PCB); ahora, necesitamos uno o mas **Bloque de control de hilo** (TCBs) para guardar el estado de cada hilo de un proceso. La mayor diferencia es que el espacio de direcciones permanece igual (osea no es necesario cambiar la page table que estamos usando).
+
+* En un proceso multi-hilo, cada hilo se ejecuta independietemente y puede llamar a varias rutinas. En vez de un solo stack en el espacio de direcciones, habra uno por hilo.
+
+* Cualquier asignación en el stack de variables, parametros, valores de retorno, etc. será ubicado en lo que llamamos **Thread-Local Storage** (Almacenamiento del hilo local).
+
+* ¿Porque usar hilos?
+    
+    1. **Paralelización**, es la tarea de transformar un programa de un solo hilo en un programa que hace trabajos en multiples CPUs.
+    
+    2. Evitar bloquear el progreso del programa dado la lentitud de I/O. Mientras un hilo espera, el planificador de la CPU puede cambiar a otro hilo, el cual este listo para ejecutarse y hacer algo útil. Los hilos permiten superposición de I/O con otras actividades en un solo programa.
+
+* **Condición de carrera**: El resultado depende de los tiempos de ejecución del código.
+
+* **Sección Critica**, es una piza de código que accede a una variable compartida y no debe ser ejecutado por más de un hilo.
+
+* **Primitivas de sincronización**, con ayuda del hardware, en combinación con el SO, se puede construir código multi-hilo que acceda a secciones criticas de una forma sincronizada y controlada, por lo que seguramente produzca el resultado correcto.
+
+---
+
+### Capitulo 27: Api de los hilos
+
+Para crear y controlar threads se utiliza la POSIX library:
+
+* `pthread_t`: tipo thread.
+
+* `pthread_attr_t`: tipo de los atributos de un hilo.
+
+* `pthread_attr_init`: inicializa un objeto tipo pthread_attr_t con los atributos correspondientes.
+
+* `Pthread_create`: crea un hilo.
+
+* `Pthread_join`: ejecuta el hilo hasta que se complete.
+
+* `pthread_mutex_destroy`
+
+* `Pthread_create` toma 4 argumentos: `thread`, `attr`, `start_routine` y `arg`:
+
+    - thread es un puntero a una estructura de tipo `pthread_t`, y es la estructura con que permite interactuar con el hilo una vez inicializada.
+    
+    - attr tiene tipo `pthread_attr_t` y es usado para especificar atributos del hilo (por ej. la prioridad de scheduling del hilo). Se inicializa anteriormente, usando `pthread_attr_init()`.
+    
+    - `start_routine` indica la función que debería ejecutar el hilo (function pointer en C) y espera algún nombre de función.
+*arg es la lista de argumentos que se le pasa a la función que ejecuta el hilo (se usan void pointers para permitir cualquier tipo de argumento/resultado).
+
+
+* `Pthread_join` permite esperar a que un hilo termine de ejecutarse antes de continuar la ejecución secuencial del programa. Esta rutina toma dos argumentos: thread, y value_ptr:
+
+    - thread tiene tipo `pthread_t` y especifica el hilo a esperar.
+    
+    - `value_ptr` es un puntero al valor de retorno que se espera. 
+
+Una vez se ejecuta la creación de un hilo, ya se tiene otra entidad en ejecución independiente de la original pero que usa el mismo address space.
+
+Tanto en `Pthread_create` como en `Pthread_join` se puede usar NULL como argumentos.
+
+Al terminar la ejecución de un thread su memoria stack se borra (como en cualquier proceso) por lo que un hilo nunca debe devolver un puntero a un valor en su stack.
+
+Por otro lado, no todos los procesos usan join, ya que se pueden crear hilos “trabajadores” que se usen indefinidamente hasta que finalice la ejecución del programa más general. 
+
+#### Locks
+
+También provistos por la POSIX library, los locks permiten generar mutual exclusion en una sección crítica mediante sincronicidad, bloqueando el acceso antes de la misma, y liberando el lock al finalizar la ejecución de esta.
+
+```c
+int rc = pthread_mutex_init(&lock, NULL);
+assert(rc == 0); //always check sucess!
+```
+
+* Inicialización de un lock.
+
+Si ningún otro hilo posee el lock cuando pthread_mutex_lock() es llamado, el hilo lo adquiere y entra a la sección crítica. Si otro thread tiene el lock, el que intentó agarrarlo no volverá de la llamada hasta que lo consiga. Solo el hilo que tiene el lock puede llamar al unlock.
+
+```c
+pthread_mutex_t lock;
+pthread_mutex_lock(&lock);
+x = x + 1;  // or whatever your critical section is
+pthread_mutex_unlock(&lock);
+```
+
+* Ejemplo de código que utiliza un lock para garantizar exclusión mutua.
+
+La función `pthread_mutex_destroy()` es llamada para destruir el lock cuando ya no se lo usa más.
+
+#### Variables de Condicion
+
+Las condition variables son útiles para mantener algún tipo de **comunicación** entre hilos (por ej., esperar que otro hilo haga algo antes de continuar). Para usarlas se debe tener un lock asociado a esta, y se debe tener control de ese lock al momento de llamar la rutina (lock→rutina→unlock).
+
+Hay dos rutinas principales:
+
+```c
+int pthread_cond_wait(pthread_cond_t *cond, pthread_mutex_t *mutex);
+int pthread_cond_signal(pthread_cond_t *cond);
+```
+
+`pthread_cond_wait`: libera el lock y pone el hilo (quien la llama) a dormir hasta recibir la señal (cond) esperada, momento en el que vuelve a adquirir el lock. Suele ser llamada en un loop.
+
+`pthread_cond_signal`: se ejecuta cuando un un hilo cambió algo en el programa, y se manda una señal a la condición señalada para despertar a los hilos que esperaban por la misma.
+
+wait asume que el hilo tiene un lock en su poder que debe ser liberado al dormir el proceso para que otros hilos/procesos lo puedan adquirir. El hilo cuando se despierte debe readquirir el lock para poder ejecutarse.
+
+wait debe liberar el lock y dormir el proceso de forma atómica, para evitar race conditions.
+
+#### Conceptos Importantes!!!!
+
+* Para crear un hilo usamos `pthread_create()`, que tiene cuatro argumentos:
+
+    - `*thread`, es un puntero a una estructura de tipo `pthread_t`; usamos esta estructura para interactuar con el hilo, y por eso necesitamos pasarsela a `pthread_create()` para inicialzarla.
+    
+    - `*attr`, es usado para especificar cualquier atributo que deba tener el hilo. (por ejemplo, setear el tamaño del stack o quizas información sobre la prioridad de planifiacación del hilo).
+    
+    - `*(*start_routine)(void*)`, pide que función deberia empezar a ejecutar el hilo. Esto lo llamamos **Puntero a una función**, y esto nos dice que se espera un nombre de una función (`start_routine`), al cual se le pasa un solo argumento de tipo `void *`, y cual retorna un valor de tipo `void *`.
+    
+    - `arg`, es exactamente el argumento para ser pasado donde el hilo comienza la ejecución.
+* `pthread_join()` lo que hace es esperar a que un hilo termine. Esta rutina toma dos argumentos:
+    
+    - El primero es de tipo `pthread_t`, y es usado para especificar por cual hilo esperar. Esta variable es inicializada en la creación del hilo.
+    - El segundo es un puntero al valor de retorno que deseas obtener (`void **value_prt`). Dado que una que una puede retornar cualquier cosa, esta definida para retornar un puntero a `void`; dado que `pthread_join()` cambia el valor del argumento pasado, necesitas pasar un puntero y no el valor.
+
+* **Locks** es un mecanismo de sincronización utilizado para garantizar que solo un hilo acceda a una sección critica del código a la vez. Sirve para prevenir condiciones de carrea.
+
+* Para provver exculsión mutua a una sección critica a traves de locks, usamos: `int pthread_mutex_lock(pthread_mutex_y *mutex)` y `int pthread_mutex_unlock(pthread_mutex_t *mutex)`.
+
+* Para inicializar un lock usamos la forma dinámica, llamamos a `pthread_mutex_init()` (`int rc = pthread_mutex_init(&lock, NULL);`):
+    
+    - El primer argumento es la dirección del mismo lock.
+    
+    - El segundo es un conjunto de argumentos opcionales.
+    
+    - Tambien se tiene que hacer el correspondiente llamado a `pthread_mutex_destroy()`.
+
+* `int pthread_mutex_trylock(pthread_mutex_t *mutex)` retorna un fallo si el lock ya lo tiene otro hilo.
+
+* `int pthread_mutex_timedlock(pthread_mutex_t *mutex, struct timespec *abs_timeout)` retorna despues de un tiempo o despues de adquirir el lock, lo que suceda primero, con un tiempo de cero se convierte en el caso `trylock`.
+
+* **Variables de condición**. Son útiles cuando algun tipo de señalización debe tomar lugar entre los hilos, si un hilo está esperando que otro haga algo antes de continuar. para usar una condición de variable, uno tiene que tener ademas un lock que este asociado con esa condición. Cuando llamamos a cualquiera de esas rutinas el lock debe estar obtenido.
+
+* Se usan dos rutinas para que los hilos interactuen:
+    
+    - `int pthread_cond_wait(pthread_cond_t *cond, pthread_mutex_t *mutex)`, pone al hilo llamador a dormir, y por lo tanto espera que otro hilo le mande una señal, usualmente cuando algo en el programa es cambiado que el hilo ahora dormirdo debe considerar. Como segundo argumento toma un lock, la razón es que ademas de poner al hilo llamador a dormir, libera el lock cuando pone a dicho llamador a dormir
+    
+    - `int pthread_cond_signal(pthread_cond_t *cond)`, se utiliza para despertar a un hilo que está esperando en una condición de variable.
+
+---
+
+### Capitulo 28: Locks
+
+Un **lock** es una **primitiva de sincronización** abstracta que cuenta con solo una variable y, debido a la naturaleza secuencial del programa, permite proteger una zona de código. Se declara la variable lock de algún tipo y la misma tiene el estado del lock en cualquier momento dado.
+
+Puede estar **available/disponible** (o **unlocked**, **free**), es decir ningún hilo tiene el lock en su posesión, o estar **acquired**/**adquirido** (o **locked**, **held**), lo que significa que un hilo (y solo uno) tiene el lock.
+
+Se pueden guardar otros **datos** en el lock, como qué hilo tiene el lock en su poder (si lo hay), o una lista de los hilos en espera de adquirir el lock. Esta información está oculta al usuario. 
+
+La rutina lock() trata de adquirir el lock y, si ningún hilo lo tiene en su control (is unlocked), va a hacerlo y entrar a la zona crítica. Este hilo es el llamado dueño/owner del lock. Si otro hilo llama lock() con la misma variable lock, no va a volver y se va a quedar en un bucle intentando conseguirlo, previniendo así que acceda a la zona crítica.
+
+Los locks no otorgan control sobre el scheduler. Los hilos son entidades creadas por el programador y administradas por el SO; con los locks el usuario se asegura que solo un hilo pueda acceder a una sección de código al mismo tiempo.
+
+#### Pthread locks
+
+La POSIX library llama **mutex** a los locks, y los usa para proveer **mutual exclusion** entre hilos.
+
+Las rutinas pasan variables a lock() y a unlock() porque pueden usarse diferentes locks para proteger diferentes zonas críticas. Esto aumenta la **concurrencia** ya que en vez de un solo bloque grande que se lockea cada vez que se accede a cualquier zona crítica en su interior (una estrategía de lock de grano grueso/**coarse-grained** locking), se pueden proteger diferentes datos y estructuras de datos con diferentes locks, permitiendo que más hilos accedan al código a la vez (**fine-grained** locking/de grano fino). Estas hacen uso de instrucciones provistas por el hardware para evitar race conditions que permitan que dos hilos obtengan un mismo lock.
+
+Un lock puede implementarse de distintas maneras, tanto con ayuda del hardware como solo mediante software, pero siempre deben cumplir con ser **correctas** (proteger la región crítica) justas (evitar la starvation de hilos esperando entrar en una sección) y tener buen **desempeño**. A continuación se presentan algunas implementaciones:
+
+#### Desactivar Interrupts
+
+Una solución para asegurar la atomicidad en las secciones críticas es desactivar las interrupciones. Esto es efectivo pero solo funciona como solución para sistemas mono core y además significa confiar en que los programas no abusen de esto, llamando a lock para monopolizar el CPU y haciendo que el SO pierda el control del sistema. Se usa solo de manera interna y en regiones pequeñas y puntuales del sistema operativo.
+
+#### Usar solo Loads/Stores
+
+Se puede intentar construir un lock sin desactivar las interrupciones usando una variable flag para indicar si algún hilo tiene un lock en su posesión, y en caso de que así sea, hacer spin wait (un bucle “;” chequeando la condición del lock) hasta que el lock sea liberado.
+Esto tiene problemas tanto de correctness (exactitud) ya que por concurrencia dos hilos podrían adquirir el lock, y de performance (desempeño) debido al alto coste de hacer spin waiting.
+
+Estos dos intentos fallidos muestran que es necesario el soporte del hardware para construir soluciones que garanticen la exclusión mutua:
+
+#### Spinlocks con Test-And-Set
+
+El hardware provee soporte para instrucciones **test-and-set** (**atomic exchange**) atómicas.
+
+Test and set devuelve el valor viejo apuntado por old_per, y actualiza el valor con new. Con esta instrucción se puede construir un **spin lock** (usando test-and-set para chequear la condición del lock, y solo saliendo del spin-wait si el valor viejo es 0).
+
+El que se use spin lock para esperar a que el **owner** libere el lock hace que sea necesario un **preemptive scheduler**. Sin embargo, (y por más que se garantice correctness y performance para sistemas multi core) se pueden generar problemas de **fairness** con hilos en espera que pueden quedar en spin indefinidamente.
+
+#### Compare-And-Swap
+
+Otra primitiva soportada por hardware es **compare-and-swap** (CaS), o compare-and-exchange. Esta se basa en comparar el valor de la dirección especificada por ptr con el esperado y, si lo es, actualizar la memoria señalada por ptr con el nuevo valor. Luego, devuelve el valor original, permitiendo a quien llamó a compare-and-swap saber si se actualizó o no algún valor.
+
+Se puede generar un lock similar al de test-and-set usando compare-and-swap en el chequeo de condición del loop. Compare and swap es una instrucción más poderosa que test and set, especialmente para algoritmos concurrentes que no usan locks (**lock-free synchronization**).
+
+#### Load-linked y Store-Conditional
+
+Algunas plataformas desacoplan las instrucciones anteriores (complejas) en dos más sencillas que ayudan en la construcción de estructuras de concurrencia (como locks) para secciones críticas, **load-linked** (ll) y **store-conditional** (sc).
+
+Load-linked toma un valor de memoria y lo coloca en un registro. Store-conditional almacena en memoria el contenido de un registro, pero solo tiene éxito si no hubo **intervención** de almacenamiento en esa dirección (un store) luego de haber usado load-link. Si lo logra, devuelve 1, y si no, no actualiza el valor y devuelve 0 (detecta race conditions).
+
+Con lock(), un hilo puede hacer spin wait esperando que flag=0 (que el lock está libre) y cuando esto pasa intentar adquirir el lock a través de store-conditional. Si lo logra, el hilo cambia atómicamente el valor de la flag a 1 y entra en la sección crítica. Puede que más de un hilo realice un load-linked y luego intente un store-conditional, debido a un interrupt y context switch, pero solo un store conditional lograra adquirir el lock, preservando la zona crítica.
+
+#### Fetch-And-Add
+
+Otra instrucción provista por el hardware es **Fetch-And-Add**, la cual atómicamente incrementa un valor mientras devuelve el valor viejo a una dirección particular. 
+
+Con ella se puede construir un **ticket lock** que usa una variable ticket y turno combinados para construir el lock. Así, cuando un hilo quiere el lock hace un fetch-and-add atómico en el valor del ticket y ese valor se considera el turno (myturn) de dicho hilo. La variable global lock→turn es usada para determinar el turno de que hilo es, y cuando myturn==turn el hilo entra a la sección crítica. El unlock aumenta el valor del turno, y así el siguiente hilo en espera (si lo hay) puede entrar a la sección crítica. Este método asegura que todos los hilos progresen.
+
+#### Demasiado Spinning
+
+Estos métodos son simples y funcionan, pero pueden ser ineficientes si la cantidad de hilos esperando por un lock es grande, desperdiciando tiempo de procesador en mucho spinning.
+
+* **Enfoque simple**: **Just yield** (“ceda el paso”)
+
+Consiste en que el hilo haciendo spin ceda el CPU, con la esperanza de que se ejecute el hilo que libere el lock (o la condición) que espera. Asumimos que tenemos yield() provisto por el SO.
+
+Este enfoque puede ser malo en **performance**, ya que el costo del context switch para correr el siguiente hilo es alto (aunque menor que hacer spinning) y no soluciona el problema de starvation.
+
+* **Enfoque con colas**: **sleeping en vez de spinning**
+
+Se puede ejercer control explícito sobre qué hilo es el siguiente para adquirir el lock después de que el actual lo libere, usando una cola con el **orden** de los hilos esperan el lock en modo sleep.
+
+Debe ser hecho con cuidado, ya que un mal timing de context switch puede causar un wakeup/waiting race y que un hilo termine durmiendo para siempre.
+
+* **Enfoque híbrido**: **Two-phase Locks**
+
+En la primera fase el lock() hace **spin** por un pequeño periodo de tiempo con la esperanza de obtener el lock (por si justo estaba por ser liberado, si la sección crítica era pequeña). Si no lo consigue rápido, entra en segunda fase y el hilo es puesto a **dormir** hasta que se libere el lock.
+
+#### Conceptos Importantes!!!!
+
+* Al llamar a la rutina `lock()` se intenta adquirir el lock; si ningun otro hilo lo tomo (osea, esta libre), el hilo adquirira el lock y entrara en la sección critica; a veces se dice que este hilo es el **dueño del lock**
+
+* Una vez que el dueño del lock llama a `unlock()`, la cerradura ahora está disponible (libre) nuevamente.
+
+* **Grano grueso**, este enfoque nos dice que usamos un lock grande que se usa cada vez que se accede a una sección critica. Usa un único lock grande que abarca toda la sección critica, bloqueadno el acceso concurrente completo mientras un hilo trabaja.
+
+* **Grano fino**, este enfoque protege diferentes datos y estructuras de datos con diferentes locks, lo que permite que más hilos esten en diferentes secciones criticas a la vez. Divide las secciones criticas en partes mas pequeñas y protege cada una con un lock independiente, permitiendo mayor concurrencia al permitir que múltiples hilos trabajen simultaneamente en diferentes partes.
+
+* **Test-and-set**
+
+```c
+int TestAndSet (int * old_ptr, int new) {
+    int old = * old_ptr; 	// recupera el valor antiguo en old_ptr
+    * old_ptr = new;
+    // almacena ‘new’ en old_ptr
+    return old;
+    // devuelve el valor anterior
+}
+```
+
+* **Intercambio atómico**, es una instrucción atomica, se utiliza para implementar mecanismos de exclusión mutua. Devuelve el antiguo valor al que apunta el `old_ptr`, y actualiza simultaneamente dicho valor a `new`. La razon por la que se llama "test-and-set" (evaluar y establecer) es que le permite "evaluar" el valor anterior (que es lo que se devuelve) mientras simultaneamente "establece" la ubicación de la memoria en un nuevo valor, es suficiente para construir un simple **lock con espera ocupada**. Su función es leer el valor de una variable (generalmente un puntero) y, al mismo tiempo, establecer a un nuevo valor en una única operación indivisible (no puede ser interrumpida por ningun otro proceso o hilo durante su ejecución, lo que garantiza que dos procesos no puedan modificar la variable simultaneamente).
+
+* **Locks con espera ocupada**, es el tipo de lock mas simple de construir y simplemente gira, usando ciclos de CPU, hasta que el lock está disponible.
+
+* **Planificador Apropiativo**, es un planificador que en vez en cuando, interrumpe un hilo a traves de un temporizador, para ejecutar otro diferente.
+
+* **`Compare-and-swap(int *ptr, int expected, int new)`** 
+
+```c
+int CompareAndSwap(int *ptr, int expected, int new) {
+    int original = *ptr;
+    if (original == expected){
+        *ptr = new;
+    }
+    return original;
+}
+```
+* **compare-and-exchange**, compara e intercambia para probar si el valor en la dirección especificada por `ptr` es igual a `expected`; si es así, actualiza la ubicación de la memoria señalada por `ptr` con el nuevo valor. En caso contrario, no hacer nada. En cualquier caso, devolver el valor original en esa ubicación de memoria, permitiendo así que el código que llama compare-and-swap sepa si tuvo exito o no. Con esta instrucción podemos construir un lock de una manera bastante similar a la de test-and-set. Es mas poderosa que test-and-set. ¿`new`?
+
+* **`load-linked(int *ptr)`** 
+
+```c
+int LoadLinked(int *ptr) {
+    return *ptr;
+}
+```
+
+* funciona de manera similar a una instrucción de carga típica, y simplemente obtiene un valor de la memoria y lo coloca en un registro.
+
+* **`store-conditional(int *ptr, int value)`** 
+
+```c
+int StoreConditional(int *ptr, int value) {
+    if (no update to *ptr since LoadLinked to this address) {
+        *ptr = value;
+        return 1; // success!
+    } else {
+        return 0; // failed to update
+    }
+}
+```
+
+* solo tiene exito (y actualiza el valor almacenado en la dirección desde la que se acaba de realizar el load-linked) si no se ha relizado ningun Almacenamiento intermedio en la dirección. En caso de exito devuelve 1 y actualiza el valor en `ptr` para `value`, el valor en `ptr` no es actualizado y retorna 0.
+
+* **`Fetch-and-Add(int *ptr)`**
+
+```c
+int FetchAndAdd(int *ptr) {
+    int old = *ptr;
+    *ptr = old + 1;
+    return old;
+}
+```
+
+* incrementa atómicamente un valor mientras devuelve el valor anterior en una dirección particular.
+
+* **lock con turno**, en lugar de un valor unico, esta solución combina un boleto y una variable de turno para construir un lock. Cuando un hilo desea adquirir un lock.
+
+```c
+typedef struct __lock_t {
+    int ticket;
+    int turn;
+} lock_t;
+void lock_init(lock_t *lock) {
+    lock->ticket = 0;
+    lock->turn = 0;
+}
+void lock(lock_t *lock) {
+    int myturn = FetchAndAdd(&lock->ticket);
+    while (lock->turn != myturn)
+    ; // spin
+}
+void unlock(lock_t *lock) {
+    lock->turn = lock->turn + 1;
+}
+```
+
+* **`park()`**, pone un hilo a dormir y **`unpark()`** despierta un hilo en particular.
+
+* **Herencia de prioridad**, es una tecnica que resuelve el problema de la inversión de prioridad, donde los locks con espera ocupada causan el problema, se puede evitar el uso de esto locks, un hilo de mayor prioridad que espera un hilo de menor prioridad puede aumentar temporalmente la prioridad del hilo inferioir, lo que le permite ejecutarse y superar la inversión.
+
+* **`setpark()`**, al llamar esta rutina, un hilo puede indicar que está a punto de estacionar (llamar a `park()`). Si luego se interrumpe y otro subproceso llama a `unpark()` antes de que se llame a `park()`, el siguiente `park()` regresa inmediatamente en lugar de dormir.
+
+* **`futex_wair(address, expected)`**, pone el hilo que hizo la llamada a dormir, asumiendo que el valor en `address` es igual a `expected`. Si no es igual, la llamada retorna inmediatamente.
+
+* **`futex_wake(address)`**, despierta un hilo que esta esperando en la cola.
+
+* **Lock de dos fases**, se da cuenta de que la espera ocupada puede ser útil, especialmente si el lock está a punto de liberarse. Entonces, en la primera fase, la cerradura itera por un tiempo, esperando que pueda adquirir el lock. Si el lock no se adquiere en la primera fase de espera ocupada, se ingresa a una segunda fase, donde se pone a dormir el hilo que hizo la llamada, y solo se despierta cuando el lock se libera más tarde.
+
+---
+
+### Capitulo 30: Variables de Condicion
+
+El sistema lock-unlock no es synchronization complete, por lo que para construir programas concurrentes es necesario utilizar otras **primitivas de sincronización**. En particular, es necesario para cuando un hilo desea chequear una **condition** antes de continuar su ejecución (si un hilo “hijo” terminó su ejecución por ej.) sin usar una variable global (chequeos spin = ineficiente).
+
+#### Definición y rutinas
+
+Para esperar que una condición se vuelva true, un hilo puede usar una **condition variable**; una **lista** explícita en la que hilos en algún estado de ejecución (**condition**) que no es el deseado (**esperando a la condición**, chequeando si puede obtener el lock) se insertan. Luego, algún otro hilo, puede despertar uno o varios de esos hilos en espera cuando cambie dicho estado, y así permitirles que continúen (al darle una **señal/signaling** a la condición) su ejecución.
+
+Se utilizan las rutinas wait() y signal() definidas en el capítulo 27.
+
+Es recomendable, para evitar errores, mantener el lock mientras se llama a signal o wait.
+
+#### El problema del productor-consumidor (Bounded Buffer)
+
+El problema de sincronización **productor/consumidor** se da cuando tenemos uno o más hilos productores y uno o más hilos consumidores. Los productores generan data items y los colocan en un buffer, mientras que los consumidores obtienen y consumen dichos elementos.
+
+Como este buffer es un recurso compartido, se necesita alguna clase de sincronización para acceder al mismo y evitar una condición de carrera (race condition).
+
+```c
+int buffer;
+int count = 0;  // initially, empty
+
+void put(int value) {
+    assert(count == 0);
+    count = 1;
+    buffer = value;
+}
+
+int get() {
+    assert(count == 1);
+    count = 0;
+    return buffer;
+}
+```
+
+* Ejemplo de buffer int, en el que el productor solo coloca un elemento si el buffer está vacío, y el consumidor solo consume un elemento si el contador indica un elemento.
+
+#### Primer intento (condition variable)
+
+Tanto put() como get() tienen secciones críticas que debemos proteger, pero no es suficiente solo con locks y hacen falta condition variables; la solución actual no funciona para más de dos hilos (un consumidor y un productor) ya que se puede dar el caso en el que un consumidor intente consumir y no haya buffers disponibles de los que consumir.
+
+En ese caso se dormiría, un productor llenaría el buffer y daría la señal de que está lleno, el consumidor se podría despertar y tratar de adquirir el lock, pero antes de esto otro consumidor podría obtenerlo y consumir el buffer para luego soltar el lock. Si ese lock lo obtiene el primer consumidor e intenta consumir del buffer, al estar este vacío se levantaría una excepción. 
+
+No hay garantía de que desde cuando un hilo se despierte hasta que adquiera el lock y se ejecute la condición por la que se despertó se mantenga. Esta interpretación de señales es conocida como **Mesa semantics**.
+
+#### Segundo intento (while, not if)
+
+Si cambiamos el cómo se chequea la condición y en vez de un if ponemos un while, cuando un hilo consumidor ejecute la rutina va a rechequear siempre la condición (que lo despertó en un comienzo), y si no está en true se duerme. Gracias a Mesa Semantics la regla que siempre debemos recordar es **siempre usar while loops**. Aunque no sea totalmente necesario es más seguro. Pero todavía hay un error:
+
+Si luego de consumir un buffer y antes de dormir un consumidor despierta a otro consumidor en vez de a un productor, podría suceder que todos los hilos duerman indefinidamente. Por ello, las señales deben ser directas y un consumidor no debería poder despertar a otros consumidores (solo a productores) y viceversa.
+
+#### Solución para un único buffer de productor-consumidor
+
+La solución es usar dos variables de condición para dar la señal de que tipo de hilo debería despertar cuando el estado del sistema cambia. Los consumidores esperan en una **condición empty** (“hay al menos un lugar vacío”) y dan la **señal** de **fill** (“hay al menos un lugar ocupado”); los productores esperan en la señal **fill** y dan la señal **empty**. Así, un consumidor nunca puede despertar a otro consumidor y viceversa. 
+
+#### La solución correcta del productor-consumidor
+
+Se puede crear una solución más general modificando las rutinas y añadiendo más buffers, consumidores y productores, aumentando así la concurrencia y optimizando el desempeño, permitiendo que un productor duerma solo si todos los buffers están llenos y que un consumidor duerma solo si todos los buffers están vacíos.
+
+#### Condiciones de cobertura
+
+Otro problema de concurrencia ocurre cuando un hilo intenta pedir/asignar memoria, y si no hay memoria disponible se duerme. Luego, si un hilo libera memoria da una señal de que hay memoria, pero debe decidir a qué hilo (o hilos) despertar.
+
+Una solución que evita problemas es despertarlos a todos, con el costo de despertar hilos innecesariamente. Esto se llama **covering condition** y asegura que cubre los casos que deben ser cubiertos, sacrificando la eficiencia.
+
+#### Conceptos Importantes!!!!
+
+* **Semaforo**, es un objeto con un valor entero que podemos manipular con dos funciones: `sem_wait()` y `sem_post()`.
+
+```c
+int sem_wait(sem_t *s) {
+    restar uno al valor del semáforo
+    esperar si el valor del semáforo s es negativo
+}
+int sem_post(sem_t *s) {
+    sumar uno al valor del semáforo
+    si hay uno o más subprocesos esperando, despierta uno
+}
+```
+
+* Para inicializar un semaforo `s` lo inicializamos con el valor 1 pasadon 1 como tercer argumento. El segundo argumento de sem_init() se pondrá a 0, esto indica que el semáforo se comparte entre hilos del mismo proceso
+
+```c
+#include <semaphore.h>
+sem_t s;
+sem_init(&s, 0, 1);
+```
+
+* En el momento de la inicializacion de un semaforo tenemos diferentes casos:
+    
+    - Con el lock, era 1, porque estás dispuesto a tener el lock bloqueado (cederlo) inmediatamente después de la inicialización. 
+    
+    - Con el caso de la ordenación, era 0, porque no hay nada que ceder al principio; sólo cuando el hilo hijo termina se crea el recurso, momento en el que el valor se incrementa a 1.
+
+* `rwlock_acquire_writelock()`, para adquirir un lock de escritura, y `rwlock_release_writelock()`, para liberarlo. Utilizan el semáforo `writelock` para asegurar que sólo un escritor pueda adquirir el lock y así entrar en la sección crítica para actualizar la estructura de datos.
+
+* Cuando se adquiere un lock de lectura, el lector primero adquiere el lock y luego incrementa la variable readers para rastrear cuántos lectores están actualmente dentro de la estructura de datos.
+
+* **Thtottling**, es un enfoque para evitar que "demasiados" hilos hagan algo a la vez y saturen el sistema, simplemente decidiendo un umbral para "demasiados", y luego usar un semaforo para limitar el número de hilos que ejecutan simultaneamente el pedazo de código en cuestion.
+
+* **Memoria intensiva**, imaginemos que creamos cientos de hilos para trabajar en algun problema en paralelo. Sin embargo, en cierta parte del código, cada hilo adquiere una gran cantidad de memoria para realizar parte del cálculo; Esta parte del código es la memoria intensiva.
+
+* Si todos los hilos entran en la región de memoria intensiva al mismo tiempo, la suma de todas las solicitudes de asignacion de memoria superara la cantidad de memoria fisica de la maquina. Como resultado, la maquina empezara a hacer **Thrashing** (osea, a intercambiar paginas hacia y desde el disco), y todo el calculo se arrastra.
+
+---
+
+### Capitulo 31: Semaforos
+
+
