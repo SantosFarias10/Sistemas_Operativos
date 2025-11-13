@@ -1,3 +1,29 @@
+# Introduccion
+
+## Resumen de Santos, miembro de Wolovers
+
+Basado en el [Resumen](https://docs.google.com/document/d/1e5x10V286rX_EuQmJoCVOha-DTRf_hp-CFGZURr5f5Q/edit?tab=t.0) de Navier🧃, en las [Traducciones](https://github.com/GabrielHak/SistemasOperativos) de GabrielHak, y el [OSTEP](https://pages.cs.wisc.edu/~remzi/OSTEP/), mas los [Podcasts](https://open.spotify.com/show/5glisR9k3xqeMLwhDM92KZ?si=8fac02c5c1ea49e2) y notas tomadas en clases del Dios Nicolas Wolovick.
+
+Intente en reestructurar un poco el resumen en el que esta basado, rellenar algunos capitulos que me parecia que le faltaba informacion y contexto.
+
+Por ultimo, este resumen NO te garantiza que apruebes 100%, pero si te ayudara un 90% en entender todos los conceptos, para mas informacion dejo mis [Soluciones de Parciales]().
+
+Dios los bendiga 🚬
+
+## Indice
+
+### [Virtualizacion de la CPU](#virtualizacion-de-la-cpu)
+- [Capitulo 4: La Abstraccion de los Procesos](#capitulo-4-la-abstraccion-de-los-procesos)
+- [Capitulo 5: La Api de los Procesos](#capitulo-5-la-api-de-los-procesos)
+- [Capitulo 6: Ejecucion Directa Limidata (LDE)](#capitulo-6-ejecucion-directa-limidata-lde)
+- [Capitulo 7: Planificacion de la CPU](#capitulo-7-planificacion-de-la-cpu)
+- [Capitulo 8: Cola MultiNivel con Retroalimentacion (MLFQ)](#capitulo-8-cola-multinivel-con-retroalimentacion-mlfq)
+
+### [Virtualizacion de la Memoria](#virtualizacion-de-la-memoria)
+- [Capitulo 13: El Espacio de Direcciones](#capitulo-13-el-espacio-de-direcciones)
+
+
+
 # Virtualizacion de la CPU
 
 ## Capitulo 4: La Abstraccion de los Procesos
@@ -429,3 +455,8 @@ A la izquierda se muestra que sucede cuando una carga de trabajo intenta jugar c
 * **Regla 3**: Cuando un trabajo ingresa al sistema, se coloca en la cola de prioridad más alta.
 * **Regla 4**: Una vez que un trabajo utilice su tiempo asignado en un nivel dado (independientemente de cuantas veces haya renunciado a la CPU), su prioridad se reduce.
 * **Regla 5**: Despues de un periodo de tiempo determinado (S), todos los trabajos del sistema se mueven a la cola de más alta prioridad.
+
+# Virtualizacion de la Memoria
+
+## Capitulo 13: El Espacio de Direcciones
+
