@@ -343,3 +343,89 @@ Asi es como un planificador incorpora I/O. Tratando cada uso de CPU como un proc
 Nuestra suposicion final: que el planificador conoce el tiempo de ejecucion de cada proceso. Es la peor suposicion que se pudo hacer, ya que en un SO de proposito general, el SO conoce muy poco sobre el tamaño de los procesos. Sin esto SJF y STCF no funcionan bien.
 
 ## Capitulo 8: Cola MultiNivel con Retroalimentacion (MLFQ)
+
+Politica: **MLFQ** (***Multi-Level Feedback Queue***). Busca optimizar tanto el tiempo de entrega como el tiempo de respuesta, o sea, tener a la vez buena *perfomance* y ser interactivo, brindando una respuesta adaptativa.
+
+### Reglas Basicas
+
+El MLFQ tiene un numero diferentes de **Colas** (***Queue***), cada una asigana a un **Nivel de Prioridad** (***Priority Level***) diferente. En un momento dado, un proceso que esta *ready* esta en una sola cola. MLFQ usa prioridades para decidir que proceso debe ejecutarse en cierto momento: Un proceso con una mayor prioridad (o sea, en una cola mas alta) es elegido para ejecutarse.
+<br>Por supuesto, muchos procesos estaran en la misma cola, y por lo tanto, tendran la misma prioridad. En este caso, usaremos **RR** para planificar entre ellos.
+* **Regla 1**: Si Prioridad(A) > Prioridad(B) => Se ejecuta A (B no).
+* **Regla 2**: Si Prioridad(A) = Prioridad(B) => Se ejecuta A y B en RR.
+
+La clave de MLFQ radica en como el planificador establece las prioridades. En vez de dar una prioridad fija a cada proceso, MLFQ varia la prioridad de cada proceso basado en el **Comportamiento Observado**.
+<br>Por ejemplo: Un proceso cede el control de la CPU rapidamente mientras que espera por una accion del teclado, MLFQ mantendra su prioridad alta. Si en cambio, un proceso usa la CPU intensamente por largos periodos de tiempo, MLFQ reducira su prioridad. De esta forma, MLFQ trata de **Aprender** sobre los proceso a medida que se ejecutan.
+
+### Intento 1: Como Cambiar Prioridades
+
+Tenemos que decidir como MLFQ cambiara los niveles de prioridades de un proceso (y por lo tanto en que cola estara) a traves del tiempo de vida del trabajo. Para esto debemos pensar en la carga de trabajo: Una mezcla de procesos de corta ejecucion (pueden ceder la CPU frecuentemente), y algunos procesos de larga duracion que necesitan mucho tiempo de CPU pero que el tiempo de respuesta no es importante.
+* **Regla 3**: Cuando un trabajo entra en el sistema, es ubicado en la cola de mas alto nivel de prioridad.
+* **Regla 4.a**: Si un proceso usa una porcion de tiempo completa durante su ejecucion, se reduce su prioridad.
+* **Regla 4.b**: Si un proceso entrega la CPU antes de que la porcion de tiempo se acabe, se mantiene en el mismo nivel.
+
+### Ejemplo 1: Un Solo Proceso de Larga Duracion
+
+Veamos que sucede cuando se ha estado ejecutando un proceso largo en el sistema.
+
+![](../Teorico-practico/imagenes/MLFQEjemplo1.png)
+
+El proceso entra en la cola de maxima prioridad (Q2). Despues de 10 milisegundos, el planificador reduce su prioridad en uno, y por lo tanto el proceso pasa a la cola Q1. Luego de ejecutarse en Q1 por un tiempo, el trabajo es bajado a la cola de mas baja prioridad en el sistema (Q0),
+
+### Ejemplo 2: Llega un Proceso Corto
+
+En este ejemplo hay dos procesos: `A`, el cual es un proceso de larga duracion de uso intencivo de la CPU, y `B`, el cual es un proceso de corta duracion e interactivo. Asumamos que `A` se ha estado ejecutando un tiempo, y entonces llega `B`.
+
+![](../Teorico-practico/imagenes/MLFQEjemplo2.png)
+
+`A` (mostrado en negro) se esta ejecutando en la cola de prioridad mas baja; cuando `B` (mostrado en gris) kkega en el tiempo $t = 100$, y por lo tanto insertado en la cola de prioridad mas alta; como su tiempo de ejecucion es corto (solo de 20 milisegundos), `B` termina su ejecucion antes de llegar a la cola de mas baja prioridad; entonces `A` retoma su ejecucion (en baja prioridad).
+
+En este ejemplo se muestra uno de los principales **Objetivos** del algoritmo: Dado que no se sabe i un proceso sera corto o largo, primero se asume que es uno corto, por eso lo ubica en la cola de prioridad mas alta. Si realmente es un proceso corto, entonces se ejecutara rapidamente y terminara; y si no lo es, lentamente ira bajando de cola y mostrara ser un proceso largo. De esta manera MLFQ se aproxima a SJF.
+
+### Ejemplo 3: ¿Que pasa con los I/O?
+
+Como dice la regla 4.b, si un proceso entrega la CPU antes de usar su porcion de tiempo, entonces se mantendra el mismo nivel de prioridad. La intencion de esta regla es simple: Si un proceso interactivo, esta haciendo, por ejemplo, muchas I/O (digamos que esta esperando una entrada del teclado o mouse), cedera el control de la CPU antes de que se complete su porcion de tiempo; en tal caso, no queremos penalizar al proceso y por lo que simplemente se mantiene al mismo nivel.
+
+![](../Teorico-practico/imagenes/MLFQEjemplo3.png)
+
+Vemos que un proceso interactivo `B` (mostrado en gris) necesita la CPU solo 1 milisegundo antes de hacer una I/O, compitiendo con un proceso de larga ejecucion `A` (mostrado en negro). El enfoque MLFQ mantiene a `B` en la maxima prioridad. Dado que `B` mantiene liberada la CPU; si `B` es un proceso interactivo, MLFQ logra aun mas su objetivo de ejecutar proceso interactivos rapidamente.
+
+### Problema
+
+Problema de **Inanicion** (***Starvation***): Si hay demasiados procesos interactivos en el sistema, combinados consumirian todo el tiempo de CPU, y por lo tanto los proceso de larga duracion nunca recibirian nada del tiempo de la CPU.
+
+### Intento 2: Impulso de Prioridad
+
+Intentemos cambiar las reglas y veamos si podemos evitar el problema de Inanicion. La idea es elevar la prioridad de todos los procesos periodicamente. Vamos a subirlos a todos a la cola de maxima prioridad, por lo tanto hay una nueva regla:
+* **Regla 5**: Despues de un periodi de tiempo `S`, mover todos los proceso del sistema a la cola de maxima prioridad.
+
+Esta regla soluciona dos problemas a la vez:
+1. Garantizamos que los procesos tengan algo de tiempo de CPU: Ubicandolo en la cola mas alta, un proceso compartira la CPU con otro proceso de maxima prioridad en forma de RR, por lo tanto, eventualemnte recivira servicio.
+2. Si un proceso consumidor de CPU se vuelve interactivo, el planificador lo tratara apropiadamente una vez que se reciba el impulso de prioridad.
+
+Ejemplo cuando un proceso de larga duracion compite por la CPU con un proceso interactivo de corta duracion.
+
+![](../Teorico-practico/imagenes/MLFQIntento2.png)
+
+A la izquierda no hay impulso de prioridad, por lo que el proceso largo no consume CPU una vez que llegan los dos procesos cortos.
+<br>A la derecha si hay impulso de prioridad cada 50 milisegundos, por lo tanto al menos nos aseguramos que el proceso largo consumira algo de CPU, siendo impulsado a la cola de mas alta prioridad cada 50 milisegundos y por lo tanto siendo ejecutado periodicamente.
+
+### Intento 3: Mejor Conteo
+
+Problema a resolver: ¿Como prevenimos que los procesos jueguen con el planificador? Los culpables son las reglas 4.a y 4.b, el cual le permite a un proceso mantener su prioridad cediendo la CPU antes de que se agote su porcion de tiempo.
+<br>Solucion: Hacer un mejor conteo del tiempo de CPU en cada nivel del MLFQ. En vez de olvidar cuanto de una porcion de tiempo uso un proceso en un nivel dado, el planificador le hara un seguimiento, una vez que un proceso haya hecho su parte, sera degradado de cola. Entonces si usa su porcion de tiempo de una sola vez o en varias partes, no importara. Por lo que vamos a reescribir la regla 4.a y 4.b en una sola:
+* **Regla 4**: Una vez que un proceso haya usado su tiempo asignado en un nivel (independientemente de cuantas veces haya cedido la CPU), su prioridad sera reducida (o sea, se movera una cola abajo).
+
+Ejemplo:
+
+![](../Teorico-practico/imagenes/MLFQIntento3.png)
+
+A la izquierda se muestra que sucede cuando una carga de trabajo intenta jugar con el planificador con las reglas 4.a y 4.b.
+<br>A la derecha se muestra que sucede con la nueva regla 4. Un proceso puede lanzar una I/O justo antes de que finalice su porcion de tiempo y por lo tanto dominara la CPU. En cambio, con proteccion, sin importar el comportamiento del proceso sobre las I/O, lentamente se movera hascia abajo en las colas, y no puede ganar injustamente tiempo de CPU.
+
+### MFLQ Final
+
+* **Regla 1**: Si Prioridad(A) > Prioridad(B), se ejecuta A (B no).
+* **Regla 2**: Si Prioridad(A) = Prioridad(B), se ejecutan A y B en RR.
+* **Regla 3**: Cuando un trabajo ingresa al sistema, se coloca en la cola de prioridad más alta.
+* **Regla 4**: Una vez que un trabajo utilice su tiempo asignado en un nivel dado (independientemente de cuantas veces haya renunciado a la CPU), su prioridad se reduce.
+* **Regla 5**: Despues de un periodo de tiempo determinado (S), todos los trabajos del sistema se mueven a la cola de más alta prioridad.
