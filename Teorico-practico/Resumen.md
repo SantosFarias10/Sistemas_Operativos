@@ -22,8 +22,6 @@ Dios los bendiga 🚬
 ### [Virtualizacion de la Memoria](#virtualizacion-de-la-memoria)
 - [Capitulo 13: El Espacio de Direcciones](#capitulo-13-el-espacio-de-direcciones)
 
-
-
 # Virtualizacion de la CPU
 
 ## Capitulo 4: La Abstraccion de los Procesos
