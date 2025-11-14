@@ -458,3 +458,20 @@ A la izquierda se muestra que sucede cuando una carga de trabajo intenta jugar c
 
 ## Capitulo 13: El Espacio de Direcciones
 
+### Multiprogramacion y *Time Sharing*
+
+Cuando muchos procesos comenzaron a correr al mismo tiempo, el SO debio comenzar a mediar (*switchear* entre los procesos) para lograr una mayor eficiencia economica en el uso del CPU. Ademas, se volvio importante la nocion de interactividad.
+<br>Una forma de resolver esos problemas fue el ***Time Sharing*** (**Tiempo Compartido**); ir intercambiando entre los procesos (en cada cambio guardar todo su estado y registro en el disco) hasta que todos terminen. Esto resulta lento y tiene mal rendimiento cuanto mas crece la memoria.
+<br>En el mejor caso, conviene dejar los procesos en memoria y cambiar entre ellos sin guardar en disco cada vez. Al haber varios programas a la vez en memoria, la proteccion se volvio importante. Los procesos no debian leer o escribir en la memoria de otros procesos.
+
+### El Espacio de Direcciones
+
+El ***Adress Space*** (**Espacio de Direcciones**) es la abstraccion de la memoria fisica que crea el SO, y es lo que ve un programa corriendo; la virtualizacion de memoria que le proporciona a los procesos la ilusion de un espacio de memoria amplio y privado.
+
+El Adress Space de un proceso contiene todo el estado de la memoria del programa en ejecucion; el **Codigo** mismo del programa, el ***Stack*** y el ***Heap*** (por el momento ignoraremos otros elementos como variables estaticas):
+<br>El *stack* es usado para guardar la cadena de llamadas a funcion; direccion de retorno, variables locales y parametros.
+<br>El *heap* se utiliza para almacenar elementos dinamicamente (***dynamically allocated***), o sea, es memoria manejada por el usuario (usando funciones como `malloc` en C).
+
+![](../Teorico-practico/imagenes/EjemploDeAdressSpace.png)
+* Ejemplo de *Adress Space*. La direccione 0x00 es virtual; en la realidad el programa se encuentra en una direccion arbitraria de la memoria fisica.
+
