@@ -458,20 +458,36 @@ A la izquierda se muestra que sucede cuando una carga de trabajo intenta jugar c
 
 ## Capitulo 13: El Espacio de Direcciones
 
-### Multiprogramacion y *Time Sharing*
+### Tiempo Compartido (*Time Sharing*) y Multiprogramacion
 
-Cuando muchos procesos comenzaron a correr al mismo tiempo, el SO debio comenzar a mediar (*switchear* entre los procesos) para lograr una mayor eficiencia economica en el uso del CPU. Ademas, se volvio importante la nocion de interactividad.
-<br>Una forma de resolver esos problemas fue el ***Time Sharing*** (**Tiempo Compartido**); ir intercambiando entre los procesos (en cada cambio guardar todo su estado y registro en el disco) hasta que todos terminen. Esto resulta lento y tiene mal rendimiento cuanto mas crece la memoria.
-<br>En el mejor caso, conviene dejar los procesos en memoria y cambiar entre ellos sin guardar en disco cada vez. Al haber varios programas a la vez en memoria, la proteccion se volvio importante. Los procesos no debian leer o escribir en la memoria de otros procesos.
+Antes de la memoria virtual, los sistemas implementaban el tiempo compartido dandole a cada proceso acceso a toda la memoria fisica por un periodo corto de tiempo. Cuando el scheduler cambiaba de proceso, el SO debia guardar completamente el contenido de la memoria del proceso y cargar la del siguiete.
+<br>Este enfoque tenia un problema: Era muy lento, particularmente a medida que crece la memoria. Mientras que guardar y recuperar estados de registros (PC, registros de proposito genera, etc) es relativamente rapido, guardar el contenido completo de la memoria al disco es muuy lento. Por lo tanto, lo que hicieron fue dejar el proceso en la memoria mientras cambia entre ellos, permitiendole al SO implementar el tiempo compartido mas eficientemente.
 
-### El Espacio de Direcciones
+![](../Teorico-practico/imagenes/TiempoCompartido.png)
 
-El ***Adress Space*** (**Espacio de Direcciones**) es la abstraccion de la memoria fisica que crea el SO, y es lo que ve un programa corriendo; la virtualizacion de memoria que le proporciona a los procesos la ilusion de un espacio de memoria amplio y privado.
+En el diagrama se observan 3 procesos (A, B y C) el cual cada uno de ellos tiene una parte chica, 512 KiloByte, de la memoria fisica reservada para ellos. Suponiendo que tenemos un solo CPU, el SO elige ejecutar uno de esos procesos (digamos que es el A) mientras que los otros (B y C) estan en la cola de procesos listos, esperando a que los ejecuten.
 
-El Adress Space de un proceso contiene todo el estado de la memoria del programa en ejecucion; el **Codigo** mismo del programa, el ***Stack*** y el ***Heap*** (por el momento ignoraremos otros elementos como variables estaticas):
-<br>El *stack* es usado para guardar la cadena de llamadas a funcion; direccion de retorno, variables locales y parametros.
-<br>El *heap* se utiliza para almacenar elementos dinamicamente (***dynamically allocated***), o sea, es memoria manejada por el usuario (usando funciones como `malloc` en C).
+### Espacio de Direcciones (*Adress Space*)
 
-![](../Teorico-practico/imagenes/EjemploDeAdressSpace.png)
-* Ejemplo de *Adress Space*. La direccione 0x00 es virtual; en la realidad el programa se encuentra en una direccion arbitraria de la memoria fisica.
+El **Espacio de Direcciones** (***Adress Space***) es la vista del programa en ejecucion de la memoria en el sistema.
+<br>El espacio de direcciones de un proceso contiene todo el estado de la memoria del programa en ejecucion. Por ejemplo, el codigo de un programa (las instrucciones) tienen que vivir en alguna parte de la memoria, y por lo tanto ellos estan en el espacio de direcciones.
+<br>El programa, mientras se esta ejecutando, usa el ***Stack*** para mantener seguimiento de en donde se encuentra en la cadena de llamadas a funciones, asi como tambien para asignar variable locales, pasar parametros y devolver valores. El ***Heap*** es usado para asignaciones dinamicas, manejo de memoria del usuario, como las que deberia recibir de una llamada `malloc()` en C. Hay mas cosas, pero por ahora usamos solo tres componentes: *Code*, *Stack* y *Heap*.
+
+![](../Teorico-practico/imagenes/EspacioDirecciones.png)
+
+En el ejemplo tenemos un espacio de direcciones de 16 KiloByte. El codigo del programa vive en la parte superior del espacio de direcciones (comenzando desde el 0 en este ejemplo, y es empaquetado en la direccion 1 KiloByre del espacio de direcciones). El codigo es estatido (por lo que es facil de ubicar en la memoria), entonces podemos ubicarlo en la parte superior del espacio de direcciones y saber que no necesitamos mas memoria mientras se ejecuta el programa.
+<br>Luego, tenemos dos regions que pueden **Crecer** (y **Encogerse**) mientras el programa se ejecuta. Estas estan en el *Heap* (arriba) y en el *Stack* (abajo). Las ubicamos de esta forma porque cada cual debe ser capaz de agrandarse, y poniendolas en los extremos opuestos, del espacio de memoria, les permitimos el crecimiento: Solo tiene que expandirse en direcciones opuestas. Por lo tanto el *heap* empieza justo despues del codigo (en el 1KB) y crece hacia abajo (por ejemplo, crecera cuando un usuario pide memoria via `malloc()`); el *stack* comienza en el 16KB y crece hacia arriba (por ejemplo, crecera cuando el usuario hace una llamada a un procedimiento).
+
+Cuando decribimos el espacio de direccionamiento, lo que estamos describiendo es la **Abstraccion** que el SO proporciona a los programas en ejecucion. Realmente el programa no esta en memoria en las direcciones fisicas de 0 a 16KB; mas bien es cargada en alguna direccion fisica arbitraria. Volviendo a los procesos A, B y C del ejemplo anterior, podemos ver como cada proceso es cargado en la memoria en diferentes direcciones.
+<br>Cuando el SO hace esto, decimos que el SO esta **Virtualizando la Memoria**, porque el programa en ejecucion cree que esta cargado en la memoria en una direccion particular (supongamos que es 0) y que tiene un espacio de direcciones potencialmente grande (supongamos que es de 32 o 64 bits); la realidad es direferente.
+<br>Por ejemplo, cuando un proceso A intenta realizar una carga en la direccion 0 (la cual llamaremos **Direccion Virtual**), de alguna forma el SO, con la ayuda de soporte del hardware, tendra que asegurar de que la carga no vaya realmente a la direccion fisica 0, si no mas bien a la direccion fisica 320 KB (donde A esta cargado en memoria).
+
+### Objetivos
+
+El trabajo del SO es virtualizar la memoria. Para hacerlo, debe cumplir 3 objetivos:
+1. Transparencia: La implementacion de la VM (memoria virtual) deve ser invisible para el programa, el cual debe creer que tiene su propia memoria fisica. El SO junto al hardware crean esta ilusion.
+2. Eficiencia: La virtualizacion debe ser lo mas eficiente posible en terminos de tiempo y espacio. Para esto el SO utiliza distintas caracteristicas del hardware, como la TLB.
+3. Proteccion: El SO debe proteger los procesos unos de otros, asi como proteger al SO de los procesos. Para eso aisla a la memoria de los proceso (solo pueden acceder a su espacio de direcciones) para que no puedan interferir entre si, permitiendo por ejemplo, que uno falle sin que afecte al resto.
+
+## Capitulo 14: API de la Memoria
 
