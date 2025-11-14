@@ -127,7 +127,7 @@ int main(int argc, char *argv[])
 
 ### System Call `fork()`
 
-Crea un nuevo proceso. El proceso creado es una copia casi identica del proceso donde fue llamado `fork()` (***Parent***, **Padre**); el proceso creado (***Child***, **Hijo**) tiene una copia del ***Adress Space*** (Espacio de Direcciones, se puede pensar que es el "Mapa de Memoria" privado de un proceso, Es el conjunto de todas las direcciones de memoria que el proceso *cree* que tiene disponibles) pero con su propia memoria privada, sus propios **Registros** pero con el mismo contenido, el mismo **PC**, etc.
+Crea un nuevo proceso. El proceso creado es una copia casi identica del proceso donde fue llamado `fork()` (***Parent***, **Padre**); el proceso creado (***Child***, **Hijo**) tiene una copia del ***Address Space*** (Espacio de Direcciones, se puede pensar que es el "Mapa de Memoria" privado de un proceso, Es el conjunto de todas las direcciones de memoria que el proceso *cree* que tiene disponibles) pero con su propia memoria privada, sus propios **Registros** pero con el mismo contenido, el mismo **PC**, etc.
 <br>Sus ejecuciones **NO son Deterministas**, es decir que no se puede predecir en que orden van a ejecutarse el proceso padre y el proceso hijo despues del `fork()`.
 <br>No toma argumentos, se dice que tiene aridad 0 (aridad es el numero de argumentos) y devuelve:
 * **0** para el proceso hijo.
@@ -467,9 +467,9 @@ Antes de la memoria virtual, los sistemas implementaban el tiempo compartido dan
 
 En el diagrama se observan 3 procesos (A, B y C) el cual cada uno de ellos tiene una parte chica, 512 KiloByte, de la memoria fisica reservada para ellos. Suponiendo que tenemos un solo CPU, el SO elige ejecutar uno de esos procesos (digamos que es el A) mientras que los otros (B y C) estan en la cola de procesos listos, esperando a que los ejecuten.
 
-### Espacio de Direcciones (*Adress Space*)
+### Espacio de Direcciones (*Address Space*)
 
-El **Espacio de Direcciones** (***Adress Space***) es la vista del programa en ejecucion de la memoria en el sistema.
+El **Espacio de Direcciones** (***Address Space***) es la vista del programa en ejecucion de la memoria en el sistema.
 <br>El espacio de direcciones de un proceso contiene todo el estado de la memoria del programa en ejecucion. Por ejemplo, el codigo de un programa (las instrucciones) tienen que vivir en alguna parte de la memoria, y por lo tanto ellos estan en el espacio de direcciones.
 <br>El programa, mientras se esta ejecutando, usa el ***Stack*** para mantener seguimiento de en donde se encuentra en la cadena de llamadas a funciones, asi como tambien para asignar variable locales, pasar parametros y devolver valores. El ***Heap*** es usado para asignaciones dinamicas, manejo de memoria del usuario, como las que deberia recibir de una llamada `malloc()` en C. Hay mas cosas, pero por ahora usamos solo tres componentes: *Code*, *Stack* y *Heap*.
 
@@ -563,4 +563,113 @@ Algunos lenguajes tienen un manejo de memoria automatico (***garbage collector**
 * Llamar a `free()` incorrectamente: ***Free Incorrectly***. `free()` solo espera que se le pase como argumento un puntero devuelto por `malloc()`. Cn cualquier otro valor o argumento el `free()` es invalido.
 
 ## Capitulo 15: Traduccion de Direcciones
+
+En el desarrollo de la virtualizacion del CPU nos centramos en el mecanismo general LDE, Ejecucion Directa Limitada (*Limited Direct Execution*), cuya idea es dejar el proceso correr en el hardware la mayo parte del tiempo, y que en ciertos puntos clave el SO se involucre y tome decisiones que le permitan asegurarse, con ayuda del hardware, mantener el control mientras trata de mantenerse fuera del camino del proceso.
+
+En la **Virtualizacion de la Memoria** se busca algo similar; obtener **Control** y **Eficiencia** mientras se provee la virtualizacion. La eficiencia es lo que dicta que se use el apoyo del hardware. Controlar implica que el SO asegure que ninguna aplicacion tenga permitido acceder a otra memoria salvo la suya, y asi proteger aplicaciones unas de otras y al SO de las aplicaciones (lo que tambien requiere ayuda del hardware).
+
+Algo que necesitaremos del sistema de memoria virtual (VM) es **Flexibilidad**; que los procesos puedan usar su *address space* como quieran, haciendo asu el sistema mas sencillo.
+
+### Virtualizar Memoria Eficiente y Flexiblemente
+
+La idea es realizar una ***hardware-based address translation*** (**Traduccion de Direcciones en Base a Hardware**). Con la **Traduccion de Direcciones**, el hardware transforma cada acceso a memoria (*fetch*, *load*, *store*), cambiando la **Direccion Virtual** provista por la instruccion a una **Direccion Fisica** donde esta guardada la informacion deseada. Por lo tanto, en cada referencia a memoria, un traductor de direcciones es ejecutado por el hardware para redirigir referencia de memoria de la aplicacion a la ubicacion real en memoria.
+<br> El hardware no virtualiza la memoria, solo provee un mecanismo de bajo nivel para lograrlo eficientemente. Es el SO quien se involucra y maneja la memoria, sabiendo que localizaciones estan libres y cuales en uso, y manteniendo asi control sobre como la memoria es usada.
+
+### Suposiciones
+
+Por ahora asumiremos que el *address space* del usuario debe ser ubicado contiguamente en la memoria fisica. Tambien asumiremos que el tamaño del *address space* no es muy grande; especificamente, que es mas chico que el tamaño de la memoria fisica. Por ultimo, asimiremos que cada *address space* tiene el mismo tamaño.
+
+#### Ejemplo
+
+Imaginemos un proceso cuyo *address space* es:
+
+![](../Teorico-practico/imagenes/SuposicionEjemplo.png)
+
+Lo que vamos a examinar es una secuencia de codigo que carga un valor desde la memoria, lo incrementa en 3, y lo guarda de nuevo en la memoria. Se puede imaginar en codigo en C como:
+
+```c
+void func() {
+  int x = 3000;
+  x = x + 3;  // Parte del codigo que nos interesa
+}
+```
+
+El compilar traduce esta linea de codigo a assembly, la cual se ve algo asi:
+
+```assembly
+movl  0x0     (%ebx),  %eax    ; carga 0+ebx en eax
+addl  $0x03,  %eax             ; suma 3 al registro eax
+movl  %eax,   0x0      (%ebx)  ; guarda eax de vuelta a memoria
+```
+
+Se asume que la direccion de `x` ha sido puesta en el registro `ebx`, entonces carga el valor de esa direccion en el registro de proposito general `eax` usando la instruccion `movl`. La siguiente instruccion `add 3` a `eax`, y la instruccion final guarda el valor de `eax` de nuevo en la memoria en la misma ubicacion.
+<br>Volviendo a la imagen, se observa como el codigo y los datos son puestos en el *address space*; la secuencia de codigo de tres instrucciones esta ubicada en la direccion 128, y el valor de la variable `x` en la direccion 15KB. El valor inicial de `x` es 3000.
+<br>Cuando se ejecutan las instrucciones, desde la perspectiva del proceso, se ejecutan los siguientes accesos a memoria:
+* *Fetch*: Se busca la instruccion en la direccion 128.
+* *Execute*: Se ejecuta la instruccion (cargar la direccion 15KB).
+* *Fetch*: Se busca la instruccion en la direccion 132.
+* *Execute*: Se ejecuta la instruccion (sin referencia a memoria).
+* *Fetch*: Se busca la instruccion en la direccion 135.
+* *Execute*: Se ejecuta la instruccion (guardar en la direccion 15KB).
+
+Desde el punto de vista del programa, su *address space* comienza en la direccion 0 y crece hasta el maximo de 16KB; todas las referencias de memoria que genera deben estar en este rango. Pero, al virtualizar la memoria, el SO quiere ubicar el proceso en cualquier parte de la memoria fisica, no necesariamente en la direccion 0. 
+
+Vemos un ejemplo de como se deberia ver la memoria fisica una vez que el *address space* del proceso ha sido ubicado en memoria:
+
+![](../Teorico-practico/imagenes/SuposicionEjemplo2.png)
+
+Podemos ver al SO usando el primer slott de la memoria fisica para el mismo, y que ha reubicado el proceso en el slot que empieza en la direccion 32 KB de la memoria fisica. Los otros slots estan libres.
+
+### Reubicacion Dinamica (*Hardware-Based*)
+
+Para virtualizar la memoria, el SO debe poner a cada programa en un lugar diferente a la direccion 0. Para hacerlo de forma transparente (sin que el proceso se de cuenta), se usan las ideas de ***Base and Bounds*** (**Base y Limite**); aunque tambien se los conoce como ***Dynamic Relocation*** (**Reubicacion Dinamica**); se usan ambos terminos de forma indiscriminada xd.
+<br>Especificamente, se necesitan dos registros del hardware en cada CPU: Uno es llamado registro **Base** y el tro **Limite** (***Bounds***). Este par base-limite nos permite ubicar el *address space* en cualquier lugar que querramos de la memoria fisica, y asegurarnos que el proceso solo pueda acceder a su *address space*.
+<br>Como cada programa cree estar en la direccion 0, es el SO quien al cargarlos decide donde ponerlos en memoria fisica, y establece los registros base-limite con ese valor. En el ejemplo anterior, el SO decide cargar el proceso en la direccion fisica 32KB y por lo tanto configurar el registro base con ese valor.
+
+Cualquier referencia a memoria generada por el programa sera traducida por el procesador usando:
+
+$$
+Physical\_Address = Virtual\_Address + Base
+$$
+
+Cada referencia a memoria creada por el proceso es una **Direccion Virtual**, el hardware almacena los contenidos de la base a la direccion y el resultado es la **Direccion Fisica**
+
+Transformar una direccion virtual en una direccion fisica es la tecnica a la que nos referimos con **Traduccion de Direcciones**. Dado que la reubicacion de la direccion sucede en tiempo de ejecucion, y dado que podemos mover el *addres space* incluso despues de que el proceso comienza a ejecutarse, esta tecnica es conocida como **Reubicacion Dinamica**.
+
+El registro **Limite** esta para ayudar con la **Proteccion**. Especificamente, el proceso primero verifica que es legal; en el ejemplo anterior, el registro limite siempre estara seteado en 16KB. Si un proceso genera una direccion virtual que es mas grande que el limite, o es negativa, la CPU lanzara una excepcion, y probablemente el proceso sera detenido. El objetivo del limite es asegurar que todas las direcciones generadas por el proceso sean legales y este dentro de los limites de ese proceso.
+
+Notar que los registros base-limite son estructuras del hardware que esta ubicados en el chip (un par por cada CPU). A esta parte del procesador que ayuda con las traducciones de direcciones se las llama ***Memory Management Unit*** (**MMU**) (***Unidad de Administraccion de Memoria***)
+
+### Ejemplo de Traduccion
+
+Imaginemos un proceso con un *address space* de tamaño de 4KB, que ha sido cargado en la direccion fisica 16KB. Aca estan los resultado de algunas de las traducciones de direcciones.
+
+| Direccion Virtual | | Direccion Fisica |
+| :---: | :---: | :---: |
+| 0 |&rarr;| 16KB |
+| 1KB |&rarr;| 17KB |
+| 3000 |&rarr;| 19384 |
+| 4400 |&rarr;| *Fault (Fuera del Limite)* |
+
+Como vemos, simplemente agregamos la direccion base a la direccion virtual (la cual puede ser vista como un *offset* dentrol del *address space*) para obtener la direccion fisica resultante.
+
+### Soporte del Hardware
+
+El hardware debe proveer al SO distintos mecanismos para lograr la virtualizacion de la memoria:
+* La posibilidad de soportar dos modos de ejecucion (usuario y kernel).
+* Proporcionar los registros base-limite.
+* La capacidad de **Chequear** que la memoria a la que se intenta acceder se encuentre dentro de los limites de base-limite y, en ese caso, **Traducir** la memoria virtual/fisica.
+* Otorgar las **Instrucciones Privilegiadas** para que el SO pueda **Modificar** los registros base y limite (igual que poder modificar los *exception hablders*), mientras un proceso esta en ejecucion.
+* Generar excepciones cuando un programa trata de acceder a memoria ilegal o fuera de su *address space*, parando el proces y retornando el control al SO corriendo el *Exception handler*; lo mismo que ocurre si un proceso trata de ejecutar una instruccion privilegiada.
+
+### Problemas del SO
+
+Usando las herramientoas proporcionadas por el hardware, el SO logra la virtualizacion de la memoria. Para ello, cuenta con tres responsabilidades:
+1. Administracion de la memoria (*heap*): Encontrar Espacio para el *address space* de un proceso cuando este es creado, para lo cual el SO busca el espacio en la estructura de datos (***Free List***) y la asigna. Luego, cuando un proceso termina (por si mismo o la fuerza por el SO) debe quitarlo del *scheduler*, reclamar la memoria y agregar dicho espacio a la *free list*.
+2. Manejo de los registros base-limite: Debe guarda y restaurar los registros base-limite en cada *context switch*, guardar sus valores en memoria (en alguna estructura por cada proceso, como la estructura del proceso mismo (***Process Structure*** o ***Process Control Block***; **PCB**)), y al restaurarlo debe pasarle dicho valores al CPU.
+3. Definicion de los ***Exception Handlres*** (**Manejo de Excepciones**) en el momento de *booteo*, para luego ser ejecutados en caso de accesos a memoria ilegal (errores ***Out of Bounds***; fuera de rango) o intentos de uso de instrucciones privilegiadas.
+
+## Capitulo 16: Segmentacion
+
+## Capitulo 17: Gestion de Espacio Libre
 
