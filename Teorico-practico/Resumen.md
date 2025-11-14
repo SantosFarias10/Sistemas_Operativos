@@ -491,3 +491,76 @@ El trabajo del SO es virtualizar la memoria. Para hacerlo, debe cumplir 3 objeti
 
 ## Capitulo 14: API de la Memoria
 
+### Tipos de Memoria
+
+Corriendo un programa en C, hay dos tipos de memoria:
+1. El ***Stack***: las asignaciones y reasignaciones las menja el compilador **Implicitamente**. El compilador asigna la memoria necesaria y cuando ya no es necesaria la desasigna.
+2. El ***Heap***: Es usada para cosas que requieren mas permanencia, donde las asignaciones y reasignaciones las realiza el usuario **Explicitamente**.
+
+```c
+void func() {
+  int *x = (int *) malloc(sizeof(int));
+}
+```
+
+Un par de observaciones sobre este fragmento de codigo. Primero Notar que ambas asignaciones, *stack* y *heap*, ocurren en esta linea: primer el compilador sabe hacer espacio para un puntero a un entero cuando ve la declaracion a dicho puntero (`int *x`); cuando el programa llama a `malloc()`, pide memoria para un entero en el *heap*; la rutina devuelve la direccion de dicho entero (ya sea exitoso, o `NULL` en caso de fallar), el cual es guardado en el *stack* para usar por el programador.
+
+### `malloc()`
+
+Consulta por espacio en el *heap* pasando el tamaño, y en cualquier csao te devuelve un puntero, al nuevo espacio asignado, o si falla devuelve `NULL`.
+<br>El unico parametro que toma es de tipo `size_t`, el cual solamente describe cuantos bytes necesitas. En general no se tipea un numero, en cambio, se usan muchas rutinas y macros para hacerlo. Por ejemplo, para asignar espacio para un valor flotante de doble precision (`double`), simplemente se hace asi:
+
+```c
+double *d = (double *) malloc(sizeof(double));
+```
+
+Se usa el operador `sizeof()` para solicitar la cantidad correcta de espacio.
+<br>Tambien se le puede pasar el nombre de una variable (y no solo el tipo) a `sizeof()`, pero en algunos casos se puede no obtener los resultados esperados. Por ejemplo:
+
+```c
+int *x = malloc(10 * sizeof(int));
+printf("%d\n", sizeof(x));
+```
+
+En la primera linea, declaramos espacio para un array de 10 `int`. Sin embargo, cuando usamos `sizeof()` en la siguiente linea, devuelve un numero chico, 4 para maquinade de 32 bits y 8 para maquinas de 64 bits. La razon es que `sizeof()` cree que le estamos preguntando por el tamaño de un puntero a un entero, no sobre cuanta memoria tenemos asignada dinamicamente. Pero, a veces `sizeof()` funciona como se espera
+
+```c
+int x[10];
+printf("%d\n", sizeof(x));
+```
+
+En este caso, hay suficiente informacion estatica para que el compilador sepa que fueron asignados 40 bytes.
+
+Cuando declaramos espacio para un `string`, usamos el siguiente formato: `malloc(strlen(s) + 1)`, el cual obtiene el largo del `string` usando la funcion `strlen()`, y se le suma uno para hacer espacio para el caracter de fin del `string`.
+
+Notar que `malloc()` devuelve un puntero a `void`. Esta es la forma que tiene C para pasar una direccion al programador para dejarle decidir que hacer con ella.
+
+Tambien existe `calloc()` que inicializa la memoria asignada en cero. Y `realloc()` copia una region de memoria y le asigna un espacio de tamaño diferente.
+
+### `free()`
+
+Para liberar memoria del *heap* simplemente llamamos a `free()`:
+
+```c
+int *x = malloc(10 * sizeof(int));
+...
+free(x)
+```
+
+Toma como argumento un puntero retornado por `malloc()`. Notar que el tamaño de la region asignada no es pasada por el usuario, y debe ser rastreada por la misma libreria de asignacion de memoria.
+
+Tanto `malloc()` y `free()` no son *system calls*; son parte de la libreria de manejo de memoria `stdlib`. Las *system calls* son `brk()` (toma como argumento la direccion del nuevo final) y `sbrk()`, que mueven el *break*; la memoria maxima a la que puede acceder el *heap*, y `mmap()`, que permite mapear un archivo en memoria.
+
+### Errores Comunes
+
+Algunos lenguajes tienen un manejo de memoria automatico (***garbage collector***), lo que hace que no sea necesario liberar memoria explicitamente. En aquellos lenguajes que no tienen *garbage collector* (como C), se puede ocacionar algunos errores comunes:
+* Olvidarse de asignar memoria: ***Segmentation Fault***. Muchas rutinas esperan ya tener memoria asignada al ser llamadas (por ejemplo `strcpy()`).
+* No asignar memoria suficiente: ***Buffer Overflow***. Normalmente se asigna la memoria justa, algunas veces `malloc()` deja un poco de margen para evitar estos errores. Cuando no es suficiente, un *overflow* de bytes puede ocurrir.
+* Olvidarse de inicializar la memoria asignada: ***Uninitialized Read***. Si se llama a `malloc()` pero no se le asigna valores a la memoria asignada, el programa eventualmente puede acceder a ella y leer del *heap* informacion de valor desconocido, causando comportamientos no previstos.
+* Olvidarse de liberar memoria: ***Memory Leak***. Cuando ya no se usa, la memoria debe ser liberada. De no hacerlo, puede llevar a acabar la memoria en aplicaciones *long-running*.
+* Liberar memoria que todavia se puede necesitar: ***Dandling Pointer***. Si un programa libera memoria antes de usarla se queda un puntero colgante, llegando a crashear o sobreescribir memoria valida.
+* Liberar memoria repetidamente: ***Double Free***. Los programas pueden intentar liberar memoria mas de una vez, lo cual genera comportamientos indefinidos o crasheos.
+* Llamar a `free()` incorrectamente: ***Free Incorrectly***. `free()` solo espera que se le pase como argumento un puntero devuelto por `malloc()`. Cn cualquier otro valor o argumento el `free()` es invalido.
+
+## Capitulo 15: Traduccion de Direcciones
+
