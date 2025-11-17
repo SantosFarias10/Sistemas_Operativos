@@ -671,5 +671,110 @@ Usando las herramientoas proporcionadas por el hardware, el SO logra la virtuali
 
 ## Capitulo 16: Segmentacion
 
-## Capitulo 17: Gestion de Espacio Libre
+Hasta ahora hemos estado poniendo todo el *address space* de cada proceso en memoria. Con los registros base-limite, el SO puede facilmente reubicar los procesos a diferentes partes de la memoria. Pero, notar que los *address space* tienen un gran chunk de espacio libre justo en el medio, entre el *stack* y el *heap*.
+
+![](../Teorico-practico/imagenes/Segmentacion.png)
+
+Como vemos, a pesar de que el espacio entre el *stack* y el *heap* no esta siendo usado por el proceso, aun toma memoria fisica cuando reubicamos el *address space* entero en algun lugar de la memoria fisica; por lo que, el enfoque simple de usar registros base-limite es poco economico. Tambien hace dificil ejecutar un programa cuando el *address space* entero no esta en memoria; por lo tanto, base-limite no es tan flexible.
+
+### Segmentacion: Base-Limite Generalizado
+
+La idea de **Segmentacion** es dividir el *address space* de un proceso en **Segmentos Logicos** (*code*, *heap* y *stack*). Cada segmento va a tener su propio registro base-limite en la MMU. Esto permite colocar cada semgmento en distintas partes de la memoria fisica y no tener que reservar todo el *address space* completo. La memoria fisica se usa solo para los segmentos realmente utilizados.
+
+Ejemplo: Asumamos que queremos ubicar el *address space* de la imagen anterior en la memoria fisica. Con un par base-limite por segmento, podemos ubicar cada segmento **Independientemente** uno de otro en la memoria fisica.
+
+![](../Teorico-practico/imagenes/SegmentacioBaseLimiteGeneralizdo.png)
+
+Se puede ver una memoria fisica de 64KB con tres segmentos en ella (hay 16KB reservados para el SO).
+<br>Solo la memoria que es usada tiene asignado un espacio en la memoria fisica, y por lo tanto, *address spaces* mas grandes con mas cantidad de *adress space* no usadas (llamados ***Sparse Address Space*** (**Espacios de Direcciones Escasos**)) se pueden acomodar.
+<br>Lo que se esper que que la estructura de hardware de nuestra MMU requiera soporte de semgmentacion: En este caso, un conjunto de tres pares de registrso base-limites.
+
+| Segmentos | Base | Tamaño |
+| :---: | :---: | :---: |
+| *Code* | 32K | 2K |
+| *Heap* | 34K | 3K |
+| *Stack* | 28K | 2K |
+
+Cada segmento limite mantiene el tamaño de un segmento.
+<br>En la tabla se puede ver que el segmento de codigo fue ubicado en la direccion fisica 32KB y que tiene un tamaño de 2KB, y el segmento del *heap* fue puesto en la direccion 34KB con un tamaño de 3KB. El tamaño del segmento es lo mismo que el registro limite; le dice al hardware exactamente cuantos bytes son validos para ese segmento.
+
+Ejemplo de traduccion, tomando la imagen del ejemplo anterior. Asumamos que se hizo una referencia a la direccion virtual 100 (la cual esta en el segmento del codigo). Cuando la referencia toma lugar, el hardware agrega el valor base al *offset* dentro de ese segmento para llegar a la direccion fisica deseada: 100 + 32KB (32KB = 32768), o 32868. Entonces verificara que la direccion este dentro de los limites (100, 2KB), la encontrara, y emitira una referencia a la direccion de la memoria fisica 32868.
+<br>O sea, los pasos generales para traducir una direccion virtual con segmentacion:
+1. Identificar el segmento al que pertenece la Direccion virtual (*code*, *heap*, *stack*).
+2. Obtener el inicio virtual del segmento (`base_virtual_segmento`).
+3. Calcular el *offset* dentro del segmento:
+
+```ini
+offset = direccion_virtual - base_virtual_segmento
+```
+
+4. Verificar el limite del segmento: Comprobar $offset < limite$.
+   * Si no se cumple => *segmentation fault*.
+5. Obtener la base fisica del segmento (`base_fisica_segmento`).
+6. Calcular la direccion fisica:
+
+```ini
+Direccion_Fisica = base_fisica_segmento + offset
+```
+
+7. Usar la direccion fisica para acceder a memoria fisica.
+
+Entonces en el ejemplo anterior tenemos que se hizo una referencia a la direccion virtual 100, la cual esta en el segmento del codigo (o sea la base virtual es 0). Sabemos que el limite (tamaño) de `code` es de 2KB (2048) y que la base fisica es de 32 KB (32 * 1024 = 32768).
+<br> Entonces el *offset* es igual a la direccion virtual (100) - base virtual (0), tenemos que el offset es 100, como 100 es menor que 2KB (2048) (limite) entonces es valida. Luego para calcular la direccion fisica sumamos la base fisica (32 KB = 32768) mas el offset que calculamos (100), y nos da que la direccion fisica es 32868.
+
+Ahora vemos en una direccion del *heap*, direccion virtual 4200. La base del *heap* es de 34KB (34KB = 34816). Dado que el *heap* comienza en la direccion virtual 4KB (4096) (base virtual), el *offset* de 4200 es realmente es la direccion virtual (4200) menos la base virtual (4096), o sea 104. Como el limite del *heap* es 3KB, entonces el *offset* es valido. Entonces tomamos ese *offset* y se lo sumamos al registro base de la direccion fisica (34KB = 34816) para obtener la direccion fisica deseada: 34920.
+
+### ¿A que Segmento Nos Referimos?
+
+El hardware usa registros de segmentos durante la traduccion. ¿Como sabe cual es el *offset* dentro de un segmento, y a que segmento pertenece una direccion?
+<br>Un enfoque, a veces referido como un enfoque **Explicito**, es cortar el *address space* en funcion de los bits superiores de una direccion virutal. En el ejemplo anterior, tenemos tres segmentos; por lo que necesitamos dos bits para lograr nuestra tarea (dos bits ya que se puede contar hasta 4 con esa cantidad; 00, 01, 10, 11). Si usamos los primero dos bits de nuestra direccion virtual de 14 bits para seleccoinar el segmento, nuestra direccion virtual se tendria que ver algo asi:
+
+![](../Teorico-practico/imagenes/SegmentacionPregunta.png)
+
+Si los primeros dos bits son 00, el hardware sabra que la direccion virtual esta en el segmento de *code*, y por lo tanto usara el par base-limite del codigo para reubicar la direccion a la ubicacion fisica correcta. Si los primeros dos bits son 01, el hardware sabra que la direccion es del *heap*. Tomemos del ejemplo la direccion virtual del *heap* (4200) y la traduzcamo. La direccion virtual 4200, en binario, es:
+
+$$
+01_{segmento} |  000001101000_{offset}
+$$
+
+Los primeros dos bits (01) ke dicen al hardware a que segmento nos estamos refiriendo. Los utlimos 12 bits son el *offset* del segmento: 0000 0110 1000, o 0x068 en hexa, 0 104 en decimal. Sumando el registros base al *offset*, el hardware llega a la direccion fisica final. Notar que el *offset* facilita verificar el limite: Podemos simplemente verificar que el *offset* sea menos que el limite; si no lo es, la direccion es ilegal.
+
+### ¿Que pasa con el *stack*?
+
+El *stack* a sido reubicado en la direccion fisica 28KB en el diagrama anterior, pero con una diferencia: Crece hacia atras. En la memoria fisica, comienza en 28KB y crece hacia atras hasta 26KB, que corresponde a la direccion virtual 16KB a 14KB, por lo que la traduccion tiene que ser diferente.
+<br>Lo primero que necesitamos es hardware. En vez de solo valores de base-limite, el hardware tambien necesita saber en que direccion crece el segmento (por ejemplo, un bit, 1 cuando el segmento crezca en direccion positiva o 0 para direccion negativa).
+
+| Segment | Base | Size(max 4K) | Grows positive? |
+| :---: | :---: | :---: | :---: |
+| $$Code_{00}$$ | 32K | 2K | 1 |
+| $$Heap_{01}$$ | 34K | 3K | 1 |
+| $$Stack_{11}$$ | 28K | 2K | 0 |
+
+Ahora que el hardware conoce que segmentos pueden crecer de forma negativa, ahora traduce las direcciones virtuales de forma diferente. Tomamos un ejemplo de direccion virtual del *stack* y la traducimos.
+<br>Asumamos que queremos acceder a la direccion virtual 15KB, la cual debe ser mapeada en la direccion fisica 27KB. Nuestra direccion virtual, en binario es 11 1100 0000 0000 (en hexa 0x3C00). El hardware usa los primeros dos bits (11)para designar el segmento, pero entonces estamos dejando un *offset* de 3KB. Para obtener el *offset* negativo, debemos restarle a los 3KB el tamaño maximo del segmento: En el ejemplo, un segmento puede ser de 4KB, por lo que el *offset* negativo es 3KB menos 4KB, lo cual es igual a -1KB. Simplemente sumamos el *offset* negativo a la base (28KB) para llegar a la direccion fisica: 27KB. La verificacion del limite la puede calcular asegurando que el valor absoluto del *offset* negativo es menor o igual que el tamaño del segmento actual (en este caso, 2KB).
+
+### Soporte para compartir
+
+Para guardar memoria, a veces es util **Compartir** ciertos segmentos de memoria entre *address space*. En particular, ***Code Sharing*** es comun.
+<br>Para soportar compartir, necesitamos ayuda del hardware, de forma de **Proteccion de Bits**. Un soporte basico agrega pocos bits por segmento, indicando ya sea que un segmento puede o no leer o escribir un segment. Seteando un segmento de codigo como lectura, el mismo codigo puede ser compartido a traves de multiples procesos, sin preocuparnos de dañar el aislamiento; mientras que cada proceso aun cree que esta accediendo a su propia memoria privada, el SO secretamente esta compartiendo memoria que no puede ser modificada por el proceso, y por lo tanto la ilusion se mantiene.
+
+### Segmentacion: Grano Fino vs Grano grueso
+
+En los ejemplos que dimos han sido centrados en sistemas de pocos segmentos (*code*, *heap*, *stack*); podemos pensar que nuestra segmentacion es de **Grano Grueso**, como corta los *address space* en granos de chunks relativamente grandes. Pero, algunos de los primeros sistemas eran mas flexibles y le permitian a los *address space* consistir de un mayor numero de segmentos mas chivos, y se conocia como segmentacionde **Grano Fino**.
+<br>Soportar muchos segmentos requiere mas ayuda del hardware con una **Tabla de Segmentos**. Como las tablas de segmentos soportaban la creacion de un numero mas grande de segmentos, entonces esto les permitio al sistema usar de forma mas flexible los segmentos.
+
+### Soporte del SO
+
+De la segmentacion surge un nuevo numero de problemas para el SO. ¿Que debe hacer el SO en un *context switch*? Los registros de los segmentos deben ser guardados y recuperados. Claramente, cada proceso tiene su propio *address space*, y el SO debe asegurarse de iniciar estos registros correctamente antes de permitirle a un proceso ejecutarse nuevamente.
+<br>Otro problema es la interaccion del SO cuando un segmento crece o se reduce. Por ejemplo, un programa puede llamar a `malloc()` para guardar un objeto. En algunos casos, el *heap* existente sera capaz de cumplir el requerimiento, y por lo tanto `malloc()` encontrara espacio libre para el objeto y retornara un puntero a el. En otro caso, el segmento *heap* necesitara crecer. En este caso, la libreria de asignacion de memoria hara una *system call* para agrandar el *heap*. El SO entonces proporsionara mas espacio, actualizando el registro del tamaño del segmento por el nuevo tamaño, e informando a la libreria; entonces la libreria puede asignar espacio para el nuevo objeto y retornar exitosamente. Notar que el SO podria rechazar la peticion si no hay mas memoria fisica disponible o si decide que el proceso que la pidio ya tiene demasiada.
+<br>El ultimo problema es la gestion del espacio libre en la memoria fisica. Cuando se crea un nuevo *address space*, el SO tiene que ser capaz de encontrar espacio en la memoria fisica para sus segmentos. Antes, asumimos que cada *address space* tenia el mismo tamaño, por lo que la memoria fisica se podia pensar como un puñado de slots donde se podian poner los procesos. Ahora, tenemos un numero de segmentos por proceso, y cada segmento tiene un tamaño diferente.
+<br>El problema general es que la memoria fisica se llena de huevos de espacio libre, haciendo dificil la asignacion de memoria a nuevos segmentos, o que crezcan los que ya existen. Este problema es llamado **Fragmentacion Externa**.
+
+![](../Teorico-practico/imagenes/FragmentacionExterna.png)
+
+Supongamos que llega un proceso y desea guardar un segmento de 20KB. En la imagen, hay 24KB libres, pero no es un segmento contiguo. Por lo tanto, el SO no puede satisfacer la peticion de 20KB.
+<br>Una solucion podria ser **Compactar** la memoria fisica reorganizando los segmentos existentes. Por ejemplo, el SO podria frenar cualquier proceso que se este ejecutando, copiar sus datos en una region contigua de la memoria, cambiar sus valores de los registros del segmento al punto de la nueva ubicacion, y por lo tanto tener una extencion mas grande de memoria libre con la cual trabajar. Pero, compactar sale caro, copiar segmentos usa mucha memoria y una gran cantidad de tiempo de procesador.
+
+![](../Teorico-practico/imagenes/MemoriaCompactada.png)
+* Ejemplo de memoria compactada.
 
