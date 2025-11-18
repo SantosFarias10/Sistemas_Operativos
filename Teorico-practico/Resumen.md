@@ -978,3 +978,92 @@ Se ve que el bloque de 8KB de mas a la izquierda es asignado y retornado al usua
 <br>Cuando un bloque se libera se chequea que su "*Buddy*" del mismo tamaño este libre, si lo esta los combina, y asi recursivamente hasta hacer *coalescing* de todo o encontrar un "*Buddy*" en uso; simplifica el *coalescing* pero genera Fragmentacion Interna.
 
 ## Capitulo 18: Introduccion a la Paginacion
+
+El SO toma uno de dos enfoques para resolver casi cualquier problema de administracion de espacio. El primero es cortar el espacio en piezas de **tamaño variable**, como vimoes con la **Segmentacion**. Pero, esta solucion tiene problemas. En particular, cuando divide un espacio en chunks de diferentes tamaños, el mismo espacio se **Fragmenta**, y por lo tanto las asignaciones son mas dificiles.
+<br>Por lo que, se debe considerar un segundo enfoque: Cortar el espacio en piezas de **tamaño fijo**. Esta idea es llamada **Paginacion**. En vez de dividir el *address space* de un proceso en segmentos logicos de tamaño variable (por ejemplo, *code*, *heap*, *stack*), lo dividimos en unidades de tamaño fijo, que las llamaremos **Paginas**. Vemos a la memoria fisica como un *array* de slots de tamaño fijo llamados ***Page Frames***; cada uno de esos *frames* puede contener una sola pagian de memoria virtual.
+
+### Ejemplo y Descripcion General
+
+![](../Teorico-practico/imagenes/EjemploPaginacion.png)
+
+Se presenta un *address space* de 64 bytes de tamaño total, con cuatro paginas de 16 bytes.
+
+![](../Teorico-practico/imagenes/MemoriaFisicaPaginacion.png)
+
+Como vemos, la memoria fisica tambien contiene numero de *slots* de tamaño fijo, en este caso 8 *pages frames* (haciendo una memoria de 128 bytes). Las paginas del *addres space* virtual ha sido ubicado en diferentes lugares a lo largo de la memoria fisica; el diagrama tambien muestra el SO usando algo de memoria fisica para el mismo.
+
+Las ventajas de la Paginacion son:
+* **Flexibilidad**: Es capaz de apoyar la abstraccion del *address space* eficientemente, mas alla de como el proceso use el *address space* (por ejemplo, no se asume la direccion de crecimiento del *heap*/*stack* o como son usados).
+* **Simplicidad**: Permite manejar el espacio libre (la *free list*) tan solo otorgando la cantidad de paginas necesarias (y evitando la fragmentacion externa). Tomando el ejempo anterior, cuando el SO quiere ubicar en el *address space* de 64 bytes en nuestra memoria fisica de 8 paginas, es facil encontrar 4 paginas libres; dado que el SO mantiene una *free list* de todas las paginas libres, el SO tiene ubicada la pagina virtual 0 del *address space* en el *frame* fisico 3, la pagina virtual 1 del *address space* en el *frame* fisico 7, la pagina 2 en el *frame* 5, y la pagina 3 en el frame 2. Los *pages frames* 1, 4 y 6 estan libres.
+
+Para recordadr donde esta ubicada cada pagina virtual del *address space* en la memoria fisica, el SO mantiene una estructura de datos conocida como ***Page Table*** por proceso. El rol principal de la *page table* es guardar las traducciones de direcciones para cada pagina virtual del *address space*. En nuestro ejemplo, la *page table* deberia tener las siguientes cuatro entradas:
+
+(*Virtual Page* 0 &rarr; *Physical Frame* 3), (VP 1 &rarr; PF 7), (VP 2 &rarr; PF 5), y (VP 3 &rarr; PF 2)
+
+Imaginemos que el proceso con el **address space** anterior (64 bytes) esta haciendo un acceso a memoria.
+
+```assembly
+movl  <virtual address>,  %eax
+```
+
+Especificamente, prestemos atencion a la carga explicita de los datos de la direccion `<virtual address>` en el registro `eax`.
+<br>Para **Traducir** esta direccion virtual que genero el proceso, primero tenemos que dividirla en dos componentes: El **Numero de Pagina Virtual** (***Virtual Page Number***) (**VPN**), y el **Offset** en la pagina. Para este ejemplo, dado que el *address space* es de 64 bytes, necesitamos 6 bits en total para nuestra direccion virtual ($2^{6}=64$). Por lo tanto, nuestra memoria virtual puede ser conceptualizada asi:
+
+| Va5 | Va4 | Va3 | Va2 | Va1 | Va0 |
+|:---:|:---:|:---:|:---:|:---:|:---:|
+
+Va5 es el bit mas significativo de la direccion virtual, y Va0 es el bit menos significativo. Dado que sabemos el tamaño de la pagina (16 bytes), podemos dividir la direccion virtual asi:
+
+| Va5 | Va4 | Va3 | Va2 | Va1 | Va0 |
+|:---:|:---:|:---:|:---:|:---:|:---:|
+| VPN | VPN | *offset* | *offset* | *offset* | *offset* |
+
+El tamaño de la pagina es de 16 bytes en un address space de 64 bytes; por lo que necesitamos ser capaces de seleccionar 4 paginas, y los primeros 2 bits de la direccion hacen justamente eso. Por lo tanto, tenemos una VPN de 2 bits. Los bits restantes nos dicen en que bytes de la pagina estamos interesados, 4 bits en este caso; esto lo llamos *offset*.
+<br>Cuando un proceso genera una direccion virtual, el SO y el hardware deben comunicarse para traducirla en una direccion fisica. Por ejemplo, asumamos que la carga anterior es la direccion virtual 21:
+
+```assembly
+movl  21,  %eax
+```
+
+Pasanod 21 a binario, tenemos 010101, y por lo tanto podemos examinar esta direccion virtual y ver como se descompone en Numeros de Pagina Virtual (VPN) y *offset*:
+
+| 0 | 1 | 0 | 1 | 0 | 1 |
+|:---:|:---:|:---:|:---:|:---:|:---:|
+| VPN | VPN | *offset* | *offset* | *offset* | *offset* |
+
+Por lo tanto, la direccion virtual 21 esta en el quinto byte (0101) de la pagina 01. Con nuestra VPN, podemos indexar nuestra *page table* y encontrar en que *frame* fisico recide la pagina virtual 1. En la *page table* de arriba el **Numero de Frame Fisico** (***Physical Frame Number***) (**PFN**) o **Numero de Pagina Fisica** (***Physical Page Number***) (**PPN**) es 7 (111). Por lo tanto, podemos traducir esta direccion virtual reemplazando el VPN con el PFN y entonces emitir la carga de memoria fisica.
+
+![](../Teorico-practico/imagenes/TraduccionDeMemoria.png)
+
+Notar que el *offset* se mantiene igual (o sea, no se traduce), ya que el *offset* solamente nos dique **que bit dentro de la pagina queremos**.
+
+### ¿Donde se Guardan las *Pages Tables*?
+
+Las *Pages Tables* son terriblemente grandes, por lo que no mantenemos ningun hardware especial en el chip en la MMU para guardar la *page table* de un proceso en ejecucion. En cambio, guardamos la *page table* de cada proceso en algun lugar de la memoria. Asumamos por ahora que las *page table* viven en la memoria fisica que administra el SO.
+
+### ¿Que Hay Realmente en una *Page Table*?
+
+Las *Pages Tables* son estructuras de datos usadas para mapear las direcciones virtuales a direcciones fisicas. Al ser muy largas y muchas (cada una tiene muchas ***Page Table Entry*** (**PTE**); una VPN de 20 bits, por ejemplo, implica $2^{20}$ traducciones) no se almacenan en la MMU, si no directamente en la memoria.
+
+#### Organizacion
+La mas simple es *Linear Page Table*; la *page table* es vista como un *array* el cual se indexa con el VPN y se busca el PTE (entrada en la *page table*) de dicha indexacion para encontrar el PFN.
+
+Cada PTE tiene algunos bits importantes:
+* ***Valid Bit***: Permite reservar *address space* al marcar paginas como invalidas, evitanto tener que asignarles memoria (por ejemplo, el espacio aun no solicitado entre el *code*/*heap* y el *stack* de un proceso al momento de crearlo).
+* ***Protection Bits***: Indican si una pagina puede ser leida, escrita o ejecutada.
+* ***Present Bit***: Indica si se encuentra en memoria fisica o en disco.
+* ***Dirty Bit***: Indica si una pagina ha sido modificada desde que fue traida a memoria.
+* ***Accessed Bit*** ("*Reference*"): Indica si la pagina ha sido accedida (util para determinar paginas populares que debe ser mantenida en memoria).
+
+![](../Teorico-practico/imagenes/BitPageTable.png)
+* En la imgaen se de la PTE, donde ***P*** = *Present Bit*, ***R/W*** = *Allowed Read/Write*, ***U/S*** = *Allowed Access to User-Mode Processes*, ***PWT/PCD/PAT/G*** = *Hardware Catching*, ***A*** = *Accesed*, ***D*** = *Dirty*, ***PFN***.
+
+Notar que diferentes procesos (y diferentes VPN) pueden apuntar a una misma pagina (direccion) fisica (lo que reduce el numero de paginas fisicas en uso). Para esos casos, puede haber un bit ***G*** que indica si la pagina es compartida globalmente entre mas de un proceso.
+
+Tanto el *Valid Bit* como los *Protection Bit* pueden lanzar una *trap* en caso de intentar acceder a la pagina cuando no se deberia poder hacerlo.
+
+### Rapidez y Paginacion
+
+La paginacion requiere que se realice una referencia a memoria extra para buscar la traduccion de la *page table* (de virtual a fisica, de la VPN a PTE y luego a PFN), lo cual es costoso, y dado el tamaño de las *pages tables*, se relentiza demasiado el sistema.
+<br>Cuando corre, cada instruccion fetcheada genera dos referencias de memoria; una a la *page table* para encontrar el *Physical Frame* en la que la instruccion reside, y otra a la instruccion en si misma para poder fetchearla hacia la CPU.
+
