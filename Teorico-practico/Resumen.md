@@ -27,6 +27,7 @@ Dios los bendiga 🚬
 - [Capitulo 17: Gestion de Espacio Libre](#capitulo-17-gestion-de-espacio-libre)
 - [Capitulo 18: Introduccion a la Paginacion](#capitulo-18-introduccion-a-la-paginacion)
 - [Capitulo 19: Traducciones Mas Rapidas: TLB](#capitulo-19-traducciones-mas-rapidas-tlb)
+- [Capitulo 20: Tablas de Paginacion Mas Pequeñas](#capitulo-20-tablas-de-paginacion-mas-pequeñas)
 
 # Virtualizacion de la CPU
 
@@ -1070,3 +1071,105 @@ La paginacion requiere que se realice una referencia a memoria extra para buscar
 <br>Cuando corre, cada instruccion fetcheada genera dos referencias de memoria; una a la *page table* para encontrar el *Physical Frame* en la que la instruccion reside, y otra a la instruccion en si misma para poder fetchearla hacia la CPU.
 
 ## Capitulo 19: Traducciones Mas Rapidas: TLB
+
+La paginacion requiere un gran mapeo de informacion, el cual normalmente esta almacenado en memoria fisica, y la paginacion requiere una busqueda extra para cada direccion virtual generada por los procesos. Ir a memoria por la traduccion antes de cada instruccion hace perder al CPU demasiado ciclos de clock en espera.
+<br>Para aumentar la velocidad de la traduccion de las direcciones, el SO se apoya en el hardware; usa una parte del chip MMU llamada ***Translation-Lookaside*** o **TLB**, el cual es una **Cache** de traduccion de direcciones virtuales a fisicas, y por esto la llamamos ***Adress-Translation Cache***.
+<br>Cada vez que hay una referencia virtual a memoria, el hardware primero revisa la TLB para ver si la traduccion esta ahi y, si esta, la traduccion es realizada rapidamente sin necesidad de acceder a la *page table* y causar un cuello de botella en el *pipeline* del CPU.
+
+### Algoritmo Basico de la TLB
+
+Supongamos una *page table* y un TLB manejado por el hardware. El algoritmo consiste en:
+1. Extraer el VPN de la direccion virtual y revisar si el TLB tiene la traduccion para este VPN.
+2. Si lo tiene (***TLB Hit***), obtiene el PFN de la ***TLB entry***, la concatena al *offset* de la direccion virtual original, y consigue la direccion fisica deseada para acceder a memoria (mientras que los chequeos de proteccion no fallen).
+3. Si no tiene la traduccion (***TLB Miss***), el hardware accede a la *page table* para encontrar la traduccion y, asumiendo que la direccion virtual es valida y accesible, la sube a la TLB. La proxima vez que se busque esa traduccion, va a ser *TLB hit* y se ejecutara rapido.
+
+#### Ejemplo: Accediendo a un *Array*
+
+Vamos a asumir que tenemos un *array* de 10 enteros de 4 bytes en la memoria, comenzando en la direccion virtual 100. Asumamos tambien que tenemos un espacio de direcciones chico de 8 bits, con paginas de 16 bytes; por lo tanto una direccion virtual tiene una VPN de 4 bits ($2^{4}$ (VPN)$= 16$ (*pages*)) y un *offset* de 4 bits (hay 16 bytes en cada una de estas paginas).
+
+![](../Teorico-practico/imagenes/EjemploTLB.png)
+
+En el diagrama se ve el *array* en las 16 paginas de 16 bytes del sistema. Ademas se ve que la primera entrada del *array* (`a[0]`) inicia en (VPN = 06, *offset* = 04): solo tres enteros de 4 bytes entrar en esa pagian. El *array* continua en la siguiente (VPN = 07), donde esta las primeras cuatro entradas (`a[3]` ... `a[6]`). Finalmente, las ultimas tres entradas de las diez del *array* (`a[7]` ... `a[9]`) estan localizadas en la siguiente pagina del *address space* (VPN = 08).
+<br>Ahora consideremos un loop simplre que accede a cada elemento del *array*:
+
+```c
+int sum = 0;
+for (i = 0; i < 10; i++) {
+  sum += a[i];
+}
+```
+
+Para simplificar, supongamos que los unicos accesos a memoria que genera este loop son al *array*. Cuando se accede al primer elemento del *array* (`a[0]`), la CPU vera una carga a la direccion virtual 100. El hardware extra el VPN de la direccion (VPN = 06), y lo usa para verificar el TLB para una traduccion valida. Asumiendo que es la primera vez que el programa accede al *array*, el resultado sera un ***TLB Miss***.
+<br>EL siguiente acceso es a `a[1]`, sera un ***TLB Hit***. Dado que el segundo elemento del *array* esta empaquetado al lado del primero, vive en la misma pagina y dado que ya accedimos a la primera pagina entonces la trauccion ya esta cargada dentro del TLB. Acceder a `a[2]` encuentra otro ***TLB Hit***, dado que vive en la misma pagina que `a[0]` y `a[1]`.
+<br>Pero, cuando el programa acceda a `a[3]`, nos encontramos con otro ***TLB Miss***. Sin embargo, una vez mas, las siguientes entradas (`a[4]` ... `a[5]`) seran un ***TLB Hit***, dado que todas viven en la misma pagina en la memoria.
+<br>Finalmente, acceder a `a[7]` causa un ultimo ***TLB Miss***. Los ultimos dos accesos (`a[8]` y `a[9]`) reciben los beneficios de la actualizacion del TLB, causando dos ***TLB Hit***.
+
+En resumen, durante los 10 accesos a memoria del *array* tenemos: 3 ***TLB Miss*** y 7 ***TLB Hit***. Por lo que, nuestro ***TLB Hit Rate*** (numero de *hits* devidido el numero total de accesos) es 70%. La TLB se beneficia de la ***Spatial Locality*** (que los elementos estan cercas uno de otros) y, si el programa se vuelve a ejecutar rapidamente se beneficia de ***Temporal Locality*** (la rapida re-referenciacion a items en memoria en el tiempo) ya que todavia formaran parte de la TLB y volverian ser *hits*.
+<br>Obviamente, ante mayor sea el tamaño de las paginas o de la TLB, mayor porcentaje de ***TLB hit*** se genera y mayor se aprovechan estas localidades.
+
+### Manejo de los *TLB Miss*
+
+Antes, los *TLB miss* eran manejados por el hardware. En sistemas modernos son manejados por el software, usando un ***Software-Managed TLB***; en un *miss* el hardware solo levanta una excepcion que pausa el flujo de instrucciones, eleva el privilegio a modo kernel, salta al ***Trap Handler***, busca la traduccion en la *page table*, y actualiza la TLB con sitrucciones privilegiadas, para luego volver de la *trap* y que el hardware re-ejecute la ejecucion.
+<br>El *return from trap* luego de un *TLB miss* debe volver a ejecutar la misma instruccion que causo el *miss* para esta vez dar *hit*, a diferencia del *return from trap* normal que ejecuta la siguiente instruccion (el PC es diferente en cada caso).
+
+El SO debe tener cuidado de no causar un loop de *TLB misses* (por ejemplo, el *trap handler* se encuentra en una memoria virtual no cacheada en la TLB), y para esto tiene diversas estrategias que puede usar. La prinicipal ventaja de que el *TLB miss* sea manejado por software son su **Simplicidad** y **Flexibilidad**; se puede implementar cualquier estructura de datos que se necesite sin requerir un cambio en el hardware.
+
+### Contenido de la TLB
+
+Un TLB tipico debe tener 32, 64 o 128 entradas y debe ser lo que se llama **Completamente Asociativo**. Basicamente, esto significa que cualquier traduccion dada puede estar en cualquier lugar del TLB, y el hardware debe buscar en todo el TLB en paralelo para encontrar la traduccion deseada. La entrada de TLB se ve algo asi:
+
+| VPN | PFN | *other bits* |
+|:---:|:---:|:---:|
+
+Entre esos *Other Bits* suele incluirse:
+* ***Valid Bit*** que indica si una entrada tiene una traduccion valida para esa direccion de memoria virtual o no.
+* ***Protection Bits R/W/X*** que determinan si se puede acceder a una pagina (*read*, *write*, *excecute*).
+* ***Address Space Identifier***.
+* ***Dirty Bit***.
+* Y otros.
+
+Notar que el *TLB entry* (PTE) el *valid bit* es diferente al *valid bit* de la *page table*, el cual marcaba que una *page table* no ha sido asignada (*allocated*) por el proceso y no debe ser usada por ningun programa.
+
+### Problema con TLB: *Context Switch*
+
+El TLB contiene traducciones virtuales a fisicas que son validas solo para el proceso actual; esas traducciones no son significativas para otros proceso. Como resultado, cuando cambiamos de un proceso a otro, el hardware, o el SO (o ambos) deben ser tener cuidado que el proceso que se esta por ejecutar no use accidentalemte traducciones de algun proceso previo.
+<br>Ejemplo, cuando un proceso (P1) se esta ejecutando, se asume que el TLB esta guardando en cache las traducciones que son validas para P1, o sea, vienen de la *page table* de P1. Asumamos que la decima pagina virtual de p1 es mapeada al *frame* fisico 100.
+<br>Asumamos que existe otro proceso (P2), y que el SO decide hacer un *context switch* y ejecutarlo. Asumamos que la decima pagina virtual de P2 es mapeada al *frame* fisico 170. Si las entradas de ambos procesos estan en la TLB, el contenido de la TLB seria:
+
+| VPN | PFN | valid | prot |
+|:---:|:---:|:---:|:---:|
+| 10 | 100 | 1 | rwx |
+| -- | -- | 0 | -- |
+| 10 | 170 | 1 | rwx |
+| -- | -- | 0 | --- |
+
+VPN 10 se traduce a PFN 100 (P1) y PFN 170 (P2), pero el hardware no puede distringuir que entrada es significativa para que proceso. Cuando se produce un *context switch* entre procesos, las traducciones en la TLB para el ultimo proceso no son significativas para el proceso a punto de ejecutarse.
+<br>Para solucionar este problema, un enfoque es limpiar la TLB en un *context switch*, se setean todos los bits validos a 0.
+<br>Esta solucion funciona. Pero, tiene un costo: Cada vez que un proceso se ejecuta, debe incurrir en el *TLB miss* si toca sus datos y paginas de codigo. Si el SO cambia entre procesos frecuentemente, el costo sera alto.
+<br>Para reducir el costo, los sistemas agregan soporte de hardware para permitiri compartir el TLB a traves de los *context switch*. Especificamente, se provee un campo ***Adress Space Identifier*** (**ASID**) (**Identificador de Espacio de Direcciones**) en el TLB.
+<br>Si tomamos el ejemplo anterior y le agregamos el ASID:
+
+| VPN | PFN | valid | prot | ASID |
+|:---:|:---:|:---:|:---:|:---:|
+| 10 | 100 | 1 | rwx | 1 |
+| -- | -- | 0 | -- | -- |
+| 10 | 170 | 1 | rwx | 2 |
+| -- | -- | 0 | -- | -- |
+
+Por lo tanto, con los ASIDs podemos mantener traducciones de diferentes procesos al mismo tiempo sin confundirlos.
+<br>Hay otro caso donde dos entradas del TLB son similares. Si hay dos entradas para dos procesos diferentes con dos diferentes VPN que apuntan a la misma pagina fisica:
+
+| VPN | PFN | valid | prot | ASID |
+|:---:|:---:|:---:|:---:|:---:|
+| 10 | 101 | 1 | rwx | 1 |
+| -- | -- | 0 | -- | -- |
+| 50 | 101 | 1 | rwx | 2 |
+| -- | -- | 0 | -- | -- |
+
+En este caso puede surgir cuando dos procesos comparten una pagina. En el ejemplo, el proceso 1 esta compartiendo la pagina fisica 101 con el proceso 2; P1 mapea esta pagina en la decima pagina de su *address space*, y P2 mapea la Quincuagésimo (50) pagina de su *address space*.
+
+### Problema: Politica de Reemplazo
+
+La memoria cache son veloces pero pequeñas. Si para insertar una nueva entrada en la TLB es necesario reemplazar una vieja, se debe elegir una politica para realizar ese ***Cache Replacement***. La idea siempre es bajar el porcentaje de *TLB miss*; puede elegirse borrar la que mas tiempo lleva sin usarse (**LRU**: ***Least Recently Used***) para tratar de mantener la localidad temporal, o simplemente borar una *Aleatoria*, que no presenta casos borde como LRU (por ejemplo, ante un recorrido en loop de un *array* que no entre en la TLB).
+
+## Capitulo 20: Tablas de Paginacion Mas Pequeñas
