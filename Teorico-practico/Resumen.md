@@ -21,6 +21,10 @@ Dios los bendiga 🚬
 
 ### [Virtualizacion de la Memoria](#virtualizacion-de-la-memoria)
 - [Capitulo 13: El Espacio de Direcciones](#capitulo-13-el-espacio-de-direcciones)
+- [Capitulo 14: API de la Memoria](#capitulo-14-api-de-la-memoria)
+- [Capitulo 15: Traduccion de Direcciones](#capitulo-15-traduccion-de-direcciones)
+- [Capitulo 16: Segmentacion](#capitulo-16-segmentacion)
+- [Capitulo 17: Gestion de Espacio Libre](#capitulo-17-gestion-de-espacio-libre)
 
 # Virtualizacion de la CPU
 
@@ -485,9 +489,9 @@ Cuando decribimos el espacio de direccionamiento, lo que estamos describiendo es
 ### Objetivos
 
 El trabajo del SO es virtualizar la memoria. Para hacerlo, debe cumplir 3 objetivos:
-1. Transparencia: La implementacion de la VM (memoria virtual) deve ser invisible para el programa, el cual debe creer que tiene su propia memoria fisica. El SO junto al hardware crean esta ilusion.
-2. Eficiencia: La virtualizacion debe ser lo mas eficiente posible en terminos de tiempo y espacio. Para esto el SO utiliza distintas caracteristicas del hardware, como la TLB.
-3. Proteccion: El SO debe proteger los procesos unos de otros, asi como proteger al SO de los procesos. Para eso aisla a la memoria de los proceso (solo pueden acceder a su espacio de direcciones) para que no puedan interferir entre si, permitiendo por ejemplo, que uno falle sin que afecte al resto.
+1. **Transparencia**: La implementacion de la VM (memoria virtual) deve ser invisible para el programa, el cual debe creer que tiene su propia memoria fisica. El SO junto al hardware crean esta ilusion.
+2. **Eficiencia**: La virtualizacion debe ser lo mas eficiente posible en terminos de tiempo y espacio. Para esto el SO utiliza distintas caracteristicas del hardware, como la TLB.
+3. **Proteccion**: El SO debe proteger los procesos unos de otros, asi como proteger al SO de los procesos. Para eso aisla a la memoria de los proceso (solo pueden acceder a su espacio de direcciones) para que no puedan interferir entre si, permitiendo por ejemplo, que uno falle sin que afecte al resto.
 
 ## Capitulo 14: API de la Memoria
 
@@ -778,3 +782,199 @@ Supongamos que llega un proceso y desea guardar un segmento de 20KB. En la image
 ![](../Teorico-practico/imagenes/MemoriaCompactada.png)
 * Ejemplo de memoria compactada.
 
+## Capitulo 17: Gestion de Espacio Libre
+
+El manejo del espacio libre resulta sencillo cuando el espacio esta dividido en unidades de espacio constante; si se solicita espacio solo entregar la primera entrada libre (**Paginacion**). Pero se vuelve dificil al tratar con bloques de espacio libre de diferentes tamaños.
+
+![](../Teorico-practico/imagenes/GestionDeEspacioLibre.png)
+
+En la imagen se ve un ejemplo de este problema. En este caso, el espacio total disponible es de 20 bytes; desafortunadamente, esta fragmentado en dos *chunks* de 10 bytes cada uno. Como resultado, una peticion por 15 bytes fallara a pesar de que hay 20 bytes libres.
+
+### Suposiciones
+
+Asumiremos una interfaz como la que proporsiona `malloc()` y `free()`. Especificamente `void * malloc(size_t size)` tomoa un solo parametro (`size`), el cual es el numero de bytes pedidos por la aplicacion; y le llega un puntero a la region de ese tamaño. La rutina complementaria `void free(void *ptr)` toma un puntero y libera el chunk correspondiente.
+<br>La ***Free List*** es una estructura que contiene referencias a todos los chunks libres del espacio de la region de memoria administrada.
+<br>Tambien asimos que nos vamos a centrar en la **Fragmentacion Externa**. Los asignadores tambien tienen problemas de **Fragmentacion Interna**; si un asignador recibe chunks de memoria mas grandes de los que pidio, tal espacio es considerado **Fragmentacion Interna**.
+<br>Tambien supondremos que una vez que la memoria es entregada a un cliente no puede ser reubicada en otra ubicacion de la memoria. Una vez que se llama a `mallo()` con memoria dentro del *heap*, esta no puede ser tocada por la libreria hasta que se use `free()`. Por lo tanto, no compacteremos el espacio libre si es posible, lo cual debera ser util para combatir la fragmentacion. La compactacion deberia, sin embargo, ser usada en el SO para tratar con la fragmentacion cuando se implementa **Segmentacion**.
+<br>Por ultimo, se supone que el asignado administra una region contigua de bytes.
+
+### Mecanismos de Bajo nivel
+
+#### Division y Fusion
+Una *free list* contiene un conjunto de elementos que describen el espacio libre que todavia queda en el *heap*. Por lo tanto, asumamos el siguiente *heap* de 30 bytes:
+
+![](../Teorico-practico/imagenes/GestionDeEspacioLibre.png)
+
+La *free list* para este *heap* deberia tener dos elementos. Una entrada describe el primer segmento de 10 bytes (bytes 0-9), y otra entrada describe el otro segmento libre (bytes 20-29).
+
+![](../Teorico-practico/imagenes/DivisionYFusion.png)
+
+Una petision por cualquier cosa mas grande de 10 bytes va a fallar y rotornara `NULL`; no hay un unico chunk contiguo de memoria disponible de este tamaño. Una peticion para exactamente 10 bytes se podria satisfacer por cualquier chunk libre.
+<br>Supongamos que tenemos una peticion de un solobytes de memoria. En este caso, el asignador hara una accion conocida como **Division**: Encontrara un chunk libre de memoria que pueda satisfacer la peticion y lo dividira en dos. El primer chunk lo retornara al que hizo la peticion; y el segundo permanecera en la lista. Por lo tanto, en el ejemplo, si se hace una peticion por 1 byte, el asignador decide usar el segundo de los elementos de la lista para satisfacer la peticion, la llamada a `malloc()` retornara 20 (la direccion de la regoin de 1 byte) y la lista quedara algo asi:
+
+![](../Teorico-practico/imagenes/DespuesDeLaDivision.png)
+
+Se puede ver que la lista se mantuvo intacta; el unico cambio es que la region libre ahora comienza en 21, y el largo de esa region ahora es 9. Por lo tanto, **la division es comunmente usada en los asignadores cuando una peticion es menor que el tamaño de algun chunk libre** en particular.
+<br> Otro mecanismo usado en muchos asigadores es conocido como **Fusion** del espacio libre. Tomemos el ejemplo del principio (10bytes libres, 10 bytes usados y otrso 10 bytes libres).
+<br>Dado este *heap*, ¿Que pasa cuando una aplicacion llama a `free(10)`? Si lo sumamos al espacio libre de nuevo a nuestra lista, terminaremos con una lista como esta:
+
+![](../Teorico-practico/imagenes/DespuesDelFree.png)
+
+El problema: A pesar de que el *heap* entero esta libre, parece estar dividido en tres chunks de 10 bytes cada uno. Por lo tanto, si el usuario hace una peticion de 20 bytes, no encontrara un chink libre de esas caracteristicas y fallara.
+<br>Lo que hacen los asignadores para evitar este problema es **Fusionar** el espacio libre cuando un chunk de memoria es liberado. Cuando retorna un chunk liberado en memoria, mira que esta retornando y a los chunks libres cercanos; si el nuevo espacio libre esta al lado de un (o dos) chunks libres, los ordena en un solo chunk mas grande. Por lo tanto, con la Fusion, nuestra lista seria:
+
+![](../Teorico-practico/imagenes/DespuesDeLaFusion.png)
+
+### Rastreando el Tamaño de las Regiones Asignadas
+
+Notar que la interfaz para *free(void *ptr)* no toma por parametro el tamaño; por lo que es asumido por el puntero dado, la libreria `malloc()` puede determinar rapidamente la dimension de la region de memoria a libera y puede incorporar de vuelta en la *free list*.
+<br>Muchos asignadores guardan un poco de informacion extra en el *header* del bloque el cual mantiene en la memoria, usualmente justo antes de devolver el chunk de memoria. Veamos un ejemplo:
+
+![](../Teorico-practico/imagenes/Rastreando.png)
+
+En este ejemplo estamos examinando un bloque asignado de 20 bytes, apuntado por `ptr`; imaginemos que el usuario llamo a `malloc()` y guardo el resultado en `ptr`, o sea, `ptr = malloc(20)`.
+<br>El *header* como minimo contiene el tamaño de la region asignada (en este caso 20); y tambien debe contener punteros adicionales para acelerar la desasignacion, un numero magico para proporcionar verificacion de integridad, y otra informacion. Asumamos un *header* simple el cual contiene el tamaño de la region y un numero magico:
+
+```c
+typedef struct{
+  int size;
+  int magic;
+} header_t;
+```
+
+El ejemplo podria verse algo asi:
+
+![](../Teorico-practico/imagenes/NumeroMagico.png)
+
+Cuando el usuario llama a `free(ptr)`, la libreria usa un puntero aritmetico simple para descubrir donde comienza el *header*:
+
+```c
+void free(ptr){
+  header_t *hptr = (header_t *) ptr-1;
+  ...
+  }
+```
+
+Despues de obtener dicho puntero al *header*, la libreria puede determinar facilmente si el numero magico coincide con el valor esperado (`assert(htpr->magic) == 1234567`) y calcular el tamaño total de la region recien liberada por medio de la matematica (o sea, sumando el tamaño del *header* al tamaño de la region). Notar que el tamaño de la region libre es el tamaño del *header* mas el tamaño del espacio asignado por el usuario. Por lo tanto, cuando un usuario pide N bytes de memoria, la libreria no busca un chunk libre de tamaño N si no, busca un chunk libre de tamaño N mas el tamaño del *header*.
+
+Resumen rapido por si no quedo claro el tema del ***Header*** (**Encabezado**). Cuando el asignador (`malloc()`) te da memoria, no te da el bloque solo. En realidad, te da:
+
+```
+[ HEADER ]
+[ BLOQUE QUE EL PROGRAMA USA ]
+```
+
+El *Header* es una estructura (unos poco bytes) que esta justo antes del bloque que recibimos. Sirve para guardar informacion que el sistema necesita. Por ejemplo:
+* El tamaño del bloque asinado.
+* Si el bloque esta libre o ocupado.
+* Un puntero al siguiente bloque.
+* etc.
+
+Se guarda el tamaño del bloque para cuando se llama a `free(ptr)` el sistema no sabe cuanto mide el bloque que le estas devolviendo, nosotros solo le pasamos un puntero. Entonces, se necesitar mirar el *header* qye guardo antes para saber.
+
+#### Insertanto una *Free List*
+
+En una lista mas normal, cuando se asigna un nuevo nodo, solo llamamos a `malloc()` cuando necesesitamos espacio para el nodo. Pero, en la libreria de asignacion de memoria, no se puede hacer esto. En cambio, se necesita construir la lista dentro del mismo espacio libre.
+<br>Asumamos que tenemos un chunk de memoria de 4096 bytes para administrar (o sea, el *heap* es de 4KB). Para administrar esta *free list*, primero tenes que inicializar dicha lista; inicialmente, la lista deberia hacer una entrada, de tamaño 4096 (menos el tamaño del *header*). La descripcion de un nodo de la lista se veria algo asi:
+
+```c
+typedef struct __node_t {
+  int size;
+  struct ___note_t * next;
+} node_t;
+```
+
+Estamos asumiendo que el *heap* es construido de algun espacio libre adquirido via una llamada a la *system call* `mmap()`; esta no es la unica forma para construir dicho *heap* pero nos sirve especificamente para este ejemplo. El codigo:
+
+```c
+// mmap() returns a pointer to a chunk of free space
+node_t *head = mmap(NULL, 4096, PORT_READ|PORT_WRITE,
+                    MAP_ANON|MAP_PRIVATE, -1, 0);
+head->size = 4096 - sizeof(t);
+head->next = NULL;
+```
+
+Despues de ejecutar este codigo, el *heap* contiene una *free list* con un solo nodo, de tamaño 4088. El puntero *head* contiene el inicio de la direccion de este rango; vamos a asumir que es 16KB. Visualmente, el *headp* se veria asi:
+
+![](../Teorico-practico/imagenes/FreeList.png)
+
+Ahora supongamos que un chunk de memoria es pedido, digamos de tamaño de 100 bytes. Para cumplir con la peticion, la libreria encontrara un chunk de largo suficiente; dado que hay un solo chunk libre (de tamaño 4088), elegira este chunk. Entonces, el chunk sera dividido en dos: Un chunk suficientemente grande para servir a la peticion (mas el *header*), y el resto como chunk libre. Asumamos un *header* de 8 bytes, el espacio en el *heap* ahora se veria asi:
+
+![](../Teorico-practico/imagenes/FreeListDivididaEnDos.png)
+
+Por lo tanto, por la peticion de 100 bytesm la libreria asignara 108 bytes del existente chunk libre, retornara un puntero a el, escondera la informacion del *header* inmediatamente antes de la asignacion de espacio para el futuro uso de `free()`, y reducira el unico nodo libre en la lista a 3980 bytes (4088-108).
+<br>Ahora veamos al *heap* cuando tiene asignada tres regiones, cada una de 100 bytes (108 incluyendo el *header*):
+
+![](../Teorico-practico/imagenes/TresSecciones.png)
+
+Como vemos, los primeros 324 bytes del *heap* ahora estan asignados, y se puede ver tres *headers* en ese espacio. La *free list* sigue siendo poco interesante: Tiene un solo nodo (siendo apuntado por *head*), pero ahora solo tiene 3764 bytes de tamaño despues de las tres divisiones.
+<br> Si el programa devuelve memoria usando `free()`, entonces la aplicacion devuelve medio chunk de memoria asignada, llamando a `free(16500)` (se llega al valor 16500 sumando el inicio de la region de memoria, 16384, a los 108 del chunk anterior y los 8 bytes del *header* de ese chunk). Este valor esta apuntado por `sptr` en el diagrama anterior.
+<br>La libreria inmediatamente se da cuenta del tamaño de la region libre, y entonces agrega el chunk libre de nuevo en la *free list*. Asumiendo que lo insertamos en el *head* de la *free list*, el espacio ahora luciria asi:
+
+![](../Teorico-practico/imagenes/Insertado.png)
+
+Tenemos una lista que empieza con un chunk libre pequeñ (100 bytes apuntados por el *head* de la lista) y un chunk libre grande (3764 bytes). Nuestra lista finalmente tiene mas de un element.
+<br>Un ultimo ejemplo: Asumamos que los ultimos dos chunks que estan en uso son liberados. Sin fusion, terminariamos con fragmetacion:
+
+![](../Teorico-practico/imagenes/Fragmentacion.png)
+
+Como se puede ver, tenemos mucho desorden ya que nos olvidamos de **Fusionar** la lista. A pesar de que toda la memoria esta libre, esta cortado en piezas, por lo tanto aparenta ser una memoria fraccionada y no una sola.
+
+#### Agregando el *Heap*
+
+¿Que deberiamos hacer si el *heap* no alcanza para el espacio? El enfoque mas facil seria fallar. En algunos casos es la unica opcion, y por lo tanto retornar `NULL`.
+<br>Los asignadores mas tradicionales inician con un *heap* chico y piden mas memoria al SO cuando la necesitan. Esto significa que hacen algun tipo de *system call* (por ejemplo, `sbrk`) para agrandar el *heap*, y entonces asignar los nuevos chunk ahi. Para satisfacer la peticion `sbrk`, el SO encuentra paginas fisicas libres en el *address space* del proceso que hizo la peticion, y entonces retorna el valor del final del nuevo *heap*; en este punto, un *heap* mas grande esta disponible, y la peticion puede ser atendida satisfactoriamente.
+
+### Estategias Basicas
+
+El asignador ideal es rapido y minima la fragmentacion. Pero, dado que la cadena de asignacion y liberaciones puede ser arbitraria, cualquier estrategia particular puede ser mala dado una mala sucesion de entradas.
+
+1. #### *Best Fit*
+
+Se busca a traves de la *free list* al bloque libre mas **Pequeño** de los espacios iguales o superiores al solicitados. Al hacer de una busqueda **Exhaustiva** en la *free list*, genera una penalizacion de *perfomance*, y una fragmentacion en espacios libres pequeños.
+
+2. #### *Workst Fit*
+
+Se busca al bloque mas **Grande** disponible, se usa el espacio necesario, y se devuelve lo restante a la *free list*. Genera los mismos ***Overheads*** al realizar tambien una busqueda **Exhaustiva** (fragmentando esta vez en bloques libres grandes).
+
+3. #### *First Fit*
+
+Usa el **Primer** bloque de la lista lo suficientemente grande para cumplir con lo solicitado. Su ventaja es la **Velocidad** ya que evita realizar una busqueda exhaustiva, pero "**Contamina** el **Comienzo** de la *free list* al concentrar alli la fragmentacion en bloques pequeños.
+
+4. #### *Next Fit*
+
+Igual que *First Fit* pero utiliza un puntero que le permite comenzar la busqueda desde la **Ultima Posicion** revisada la vez anterior. Desparrama la Fragmentacion a lo largo de la *free list* y mantiene la **Velocidad** del enfoque anterior, pero requiere un puntero extra en la implementacion.
+
+#### Ejemplos
+
+Supongamos una **free list** con tres elementos, de tamaño 10, 30 y 20 (se ignoran los *headers* y otros detalles):
+
+![](../Teorico-practico/imagenes/FreeListEjemplos.png)
+
+Asumamos una peticion de asignacion de tamaño 15. Un enfoque *Best Fit* buscaria en la lista entera y encontraria que 20 es el *Best Fit*, ya que es el menor espacio libre que puede servir para la peticion. El resulstao de la Free List:
+
+![](../Teorico-practico/imagenes/BestFit.png)
+
+Como se ve, queda un chunk libre pequeño. Un enfoque *Workst Fit* es similar pero en cambio busca el chunk mas grande, en el ejemplo seria 30. La lista resultante:
+
+![](../Teorico-practico/imagenes/WorkstFit.png)
+
+*First Fit*, en este ejemplo, hace lo mismo que *Workst Fit*, encontrar el primer bloque libre que pueda satisfacer la peticion. La diferencia es en el costo de la busqueda.
+
+### Otros Enfoques
+
+#### Listas Segregadas
+
+Se utiliza en aplicaciones que tengan peticiones recurrentes de tamaño similar, se crea una lista para el manejo de objetos de ese tipi, y se envian las demas epticiones al *allocator* general. La fragmentacion es mejor y los pedidos de dicho tamaño se satisfacen rapido.
+<br>Por ejemplo, el *Slab Allator* asigna un numero de *Object Caches* para objetos del kernel que se solicitan seguido. Si le falta espacio pide mas *slabs* (bloques pequeños) de memoria. Este *allocator* tambien mantiene los *free objects* de las listas en un estado pre inicializado.
+
+#### *Buddy Allocation*
+
+La memoria libre es pensada como un gran espacio de tamaño $2^{N}$. Caundo se hace una peticion de memoria, la busqueda de espacio libre recursivamente divide el espacio libre en dos hasta que encuentra un bloque suficientemente grande para acomodar la peticion. En Este punto, el bloque pedido es retornado al usuario. Un ejemplo de un espacio libre siendo dividio en la busqueda de un bloque de 7KB:
+
+![](../Teorico-practico/imagenes/BloquesDivididos.png)
+
+Se ve que el bloque de 8KB de mas a la izquierda es asignado y retornado al usuario; notar que este esquema sufre de **Fragmentacion Interna**, dado que solo puede dar bloques de tamaño multiplo de potencias de dos.
+<br>Cuando un bloque se libera se chequea que su "*Buddy*" del mismo tamaño este libre, si lo esta los combina, y asi recursivamente hasta hacer *coalescing* de todo o encontrar un "*Buddy*" en uso; simplifica el *coalescing* pero genera Fragmentacion Interna.
+
+## Capitulo 18: Introduccion a la Paginacion
