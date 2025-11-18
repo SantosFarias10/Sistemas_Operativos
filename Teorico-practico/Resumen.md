@@ -25,6 +25,8 @@ Dios los bendiga 🚬
 - [Capitulo 15: Traduccion de Direcciones](#capitulo-15-traduccion-de-direcciones)
 - [Capitulo 16: Segmentacion](#capitulo-16-segmentacion)
 - [Capitulo 17: Gestion de Espacio Libre](#capitulo-17-gestion-de-espacio-libre)
+- [Capitulo 18: Introduccion a la Paginacion](#capitulo-18-introduccion-a-la-paginacion)
+- [Capitulo 19: Traducciones Mas Rapidas: TLB](#capitulo-19-traducciones-mas-rapidas-tlb)
 
 # Virtualizacion de la CPU
 
@@ -1067,3 +1069,4 @@ Tanto el *Valid Bit* como los *Protection Bit* pueden lanzar una *trap* en caso 
 La paginacion requiere que se realice una referencia a memoria extra para buscar la traduccion de la *page table* (de virtual a fisica, de la VPN a PTE y luego a PFN), lo cual es costoso, y dado el tamaño de las *pages tables*, se relentiza demasiado el sistema.
 <br>Cuando corre, cada instruccion fetcheada genera dos referencias de memoria; una a la *page table* para encontrar el *Physical Frame* en la que la instruccion reside, y otra a la instruccion en si misma para poder fetchearla hacia la CPU.
 
+## Capitulo 19: Traducciones Mas Rapidas: TLB
