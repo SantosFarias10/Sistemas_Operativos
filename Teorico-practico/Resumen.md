@@ -1290,7 +1290,7 @@ Hasta ahora suponiamos que las *page tables* estaban en memoria del kernel, pero
 
 ### ¡¡¡Ejemplos Practicos!!!
 
-Recordar que son estructuras de datos que, a partir de una direccion virtual de 32 bits (arriba), permiten generar una direccion fisica de 32 bits (63 su se usa PAE).
+Recordar que son estructuras de datos que, a partir de una direccion virtual de 32 bits (arriba), permiten generar una direccion fisica de 32 bits (63 su se usa PAE (***Physical Addres Extension***)).
 
 ![](../Teorico-practico/imagenes/EjemploPractico.png)
 * *Page Table* 10/22 (de un nivel) para paginas de 4MB.
@@ -1308,4 +1308,16 @@ Recordar que una pagina no puede contener segmentos (*heap*, *stack*, *code*) de
 <br>En un sistema con paginas lineales puede que una *page table* corresponda a un proceso. En uno de paginas multinivel hay todo un directorio por cada proceso, el cual puede tener una o mas tablas.
 
 ![](../Teorico-practico/imagenes/EjemploPractico3.png)
+* *Page Table* 9/9/12 (de tres niveles) de un i386 (x86) con PAE (***Physical Addres Extension***)
 
+PAE permite direccionar mas de 4GB de memoria fisica ($2^{32}$ bytes, limite del diseño anterior) al pasar las *tables entries* de 32 bits a 64 bits (sumando mas espacio en la *page frame number* de cada una de ellas). Para ello, añade un nivel mas en la jerarquia de las *page tables*. El *virtual address space* todavia es de hasta 4GB (32 bits).
+
+![](../Teorico-practico/imagenes/EjemploPractico4.png)
+* Traduccion de direciones en la arquitectura RISC-V (9/9/9).
+
+*Page Diretory* ahora con un ancho de 64 bits (al igual que la direccion virtual) y con direcciones fisicas de 56 bits.
+<br>Notar que al ser 9/9/9/12 usa los bits menos significativos de los 64 ahora disponibles (los restantes son bits EXT de extension).
+
+# Concurrencia
+
+## Capitulo 26: Introduccion a la Concurrencia
