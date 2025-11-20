@@ -1349,3 +1349,56 @@ Una solucion que garantiza la exclusion mutua es tener instrucciones que, en un 
 
 En general esto no es posible, por lo que, usando soporte del hardware y del SO, se construyen diferente **Primitivas de Sincronizacion**; codigo *multi-thread* en el que cada hilo accede a las secciones criticas de forma sincronizada y controlada, evitando las condiciones de carrera y asegurando la exclusion mutua.
 
+## Capitulo 27: API de los Hilos
+
+Para crear y controlar *threads* se utilia la ***POSIX Library***:
+* `pthread_t`: Tipo que representa al *thread*.
+* `pthread_attr_t`: Tipo que reprenseta a los atributos de un hilo.
+* `pthred_attr_init`: Inicializa un objeto tipo `pthreadd_att_t` con valores por defecto.
+* **`pthread_created`**: Crea un hilo. Toma 4 argumentos: `thread`, `attr`, `start_routine` y `arg`.
+  * `thread`: Es un puntero a una estructura de tipo `pthread_t`, y es la estructura que permite interactuar con el hilo.
+  * `attr`: Tiene tipo `pthread_attr_t` y es usado para especificar atributos del hilo (por ejemplo, la prioridad de scheduling del hilo). Se inicializa anteriormente, usando `pthred_attr_init()`.
+  * `start_routine`: Indica la funcion que deberia ejecutar el hilo (***Function Pointer*** en C) y espera algun nombre de funcion.
+  * `arg`: Es la lista de argumentos que se le pasa a la funcion que ejecuta el hilo (se usan `void pointer` para permitir cualquier tipo de argumento/resultado).
+* **`pthread_join`**: Espera a que un hilo termine y recoge su valor de retorno. Esta rutina toma dos argumentos:
+  * `thread`: Tiene tipo `pthread_t` y especifica el hilo a esperar.
+  * `value_ptr`: Es un puntero al valor de retorno que se espera.
+* **`pthread_mutex_destroy`**: ***Mutex*** es un mecanismo sincronizado que garantiza que solo un hilo pueda ejecutar una seccion critica a la vez. `pthread_mutex_destroy` se usa para liberar los recursos asociados al mutex cuando ya no se necesita. Debe llamarse unicamente cuando ningun hilo lo tenga bloqueado.
+
+Una vez que se ejecuta la creacion de un hilo, ya se tiene otra identidad en ejecucion independientemente de la original pero que usa el mismo *address space*.
+<br>Tanto en `pthread_create` como en `pthread_join` se puede usar `NULL` como argumentos.
+
+Al terminar la ejecucion de un hilo su memoria *stack* se borra (como cualquier proceso) por lo que un hilo nunca debe devolver un puntero a un valor en su *stack*.
+<br>Por otro lado, no todos los procesos usan `join`, ya que se puede crear hilos **"Trabajadores"** que se usen indefinidamente hasta que finalice la ejecucion del programa mas general.
+
+### *Locks*
+
+Tambien provistos por la *POSIX Library*, los ***locks*** permiten generar exclusion mutua en una seccion critica mediante sincronicidad, bloqueando el acceso entes de la misma, y liberando el *lock* al finalizar la ejecucion de esta.
+
+```c
+int rc = pthread_mitex_init(&lock, NULL);
+assert(rc == 0); // Verifica que la inicializacion se haya realizado correctamente
+```
+* En el codigo se muestra como se inicializa un *lock*.
+
+Si ningun otro hilo posee el *lock* cuando `pthread_mutex_lock()` es llamado, el hilo lo adquier y entra a la seccion critica. Si otro hilo tiene el *lock*, el que intento agarrarlo no volvera de la llamada que lo consiga. Solo el hilo que tiene el *lock* puede llamar al *unlock*.
+
+```c
+pthread_mutex_t lock;
+pthread_mutex_lock(&lock);
+x = x + 1;  // Seccion Critica
+pthread_mutex_unlock(&lock);
+```
+* En el codigo se muestra como se utiliza un *lock* para garantizar exclusion mutua.
+
+La funcion `pthread_mutex_destroy` se usa para destruir el *lock* cuando ya no se lo usa mas.
+
+### Variables de Condicion
+
+Las **variables de condicion** (***Condition Variables***) son uties para mantener algun tipo de **Comunicacion** entre hilos (por ejemplo, esperar que otro hilo haga algo antes de continuar). Para usarlas se debe tener un *lock* asociado a esta, y se debe tener control de ese *lock* al momento de llamar la rutina (lock -> rutina -> unlock).
+
+Hay dos rutinas principales:
+* `int pthread_cond_wait(pthread_cond_t *cond, pthread_mutex_t *mutex)`: Libera el *lock* y pone el hilo (quien la llama) a dormir hasta recibir la señal (`cond`) esperada, momento en el que vuelve a adquirir el *lock*. Suele ser llamada en un loop.
+* `int pthread_cond_signal(pthread_cond_t *cond)`: Se ejecuta cuando un hilo cambio algo en el programa, y se manda una señal a la condicion señalada para desperar a los hilos que esperaban por la misma.
+* `pthread_cond_wait(cond, mutex)`: Asume que el hilo tiene un *lock* en su poder que debe ser liberado al dormir el proceso para que otros hilos/procesos lo puedan adquirir. El hilo cuando se despierte debe readquirir el *lock* para poder ejecutarse.
+<br>`pthread_cond_wait` debe liberar el lock y dormir el proceso de forma atomica, para evitar *race conditions*.
