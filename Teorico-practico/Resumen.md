@@ -29,6 +29,9 @@ Dios los bendiga 🚬
 - [Capitulo 19: Traducciones Mas Rapidas: TLB](#capitulo-19-traducciones-mas-rapidas-tlb)
 - [Capitulo 20: Tablas de Paginacion Mas Pequeñas](#capitulo-20-tablas-de-paginacion-mas-pequeñas)
 
+### [Concurrencia](#concurrencia)
+- [Capitulo 26: Introduccion a la Concurrencia](#capitulo-26-introduccion-a-la-concurrencia)
+
 # Virtualizacion de la CPU
 
 ## Capitulo 4: La Abstraccion de los Procesos
@@ -651,12 +654,12 @@ Notar que los registros base-limite son estructuras del hardware que esta ubicad
 
 Imaginemos un proceso con un *address space* de tamaño de 4KB, que ha sido cargado en la direccion fisica 16KB. Aca estan los resultado de algunas de las traducciones de direcciones.
 
-| Direccion Virtual | | Direccion Fisica |
-| :---: | :---: | :---: |
-| 0 |&rarr;| 16KB |
-| 1KB |&rarr;| 17KB |
-| 3000 |&rarr;| 19384 |
-| 4400 |&rarr;| *Fault (Fuera del Limite)* |
+| Direccion Virtual |        |      Direccion Fisica      |
+| :---------------: | :----: | :------------------------: |
+|         0         | &rarr; |            16KB            |
+|        1KB        | &rarr; |            17KB            |
+|       3000        | &rarr; |           19384            |
+|       4400        | &rarr; | *Fault (Fuera del Limite)* |
 
 Como vemos, simplemente agregamos la direccion base a la direccion virtual (la cual puede ser vista como un *offset* dentrol del *address space*) para obtener la direccion fisica resultante.
 
@@ -696,11 +699,11 @@ Se puede ver una memoria fisica de 64KB con tres segmentos en ella (hay 16KB res
 <br>Solo la memoria que es usada tiene asignado un espacio en la memoria fisica, y por lo tanto, *address spaces* mas grandes con mas cantidad de *adress space* no usadas (llamados ***Sparse Address Space*** (**Espacios de Direcciones Escasos**)) se pueden acomodar.
 <br>Lo que se esper que que la estructura de hardware de nuestra MMU requiera soporte de semgmentacion: En este caso, un conjunto de tres pares de registrso base-limites.
 
-| Segmentos | Base | Tamaño |
-| :---: | :---: | :---: |
-| *Code* | 32K | 2K |
-| *Heap* | 34K | 3K |
-| *Stack* | 28K | 2K |
+| Segmentos | Base  | Tamaño |
+| :-------: | :---: | :----: |
+|  *Code*   |  32K  |   2K   |
+|  *Heap*   |  34K  |   3K   |
+|  *Stack*  |  28K  |   2K   |
 
 Cada segmento limite mantiene el tamaño de un segmento.
 <br>En la tabla se puede ver que el segmento de codigo fue ubicado en la direccion fisica 32KB y que tiene un tamaño de 2KB, y el segmento del *heap* fue puesto en la direccion 34KB con un tamaño de 3KB. El tamaño del segmento es lo mismo que el registro limite; le dice al hardware exactamente cuantos bytes son validos para ese segmento.
@@ -751,11 +754,11 @@ Los primeros dos bits (01) ke dicen al hardware a que segmento nos estamos refir
 El *stack* a sido reubicado en la direccion fisica 28KB en el diagrama anterior, pero con una diferencia: Crece hacia atras. En la memoria fisica, comienza en 28KB y crece hacia atras hasta 26KB, que corresponde a la direccion virtual 16KB a 14KB, por lo que la traduccion tiene que ser diferente.
 <br>Lo primero que necesitamos es hardware. En vez de solo valores de base-limite, el hardware tambien necesita saber en que direccion crece el segmento (por ejemplo, un bit, 1 cuando el segmento crezca en direccion positiva o 0 para direccion negativa).
 
-| Segment | Base | Size(max 4K) | Grows positive? |
-| :---: | :---: | :---: | :---: |
-| $$Code_{00}$$ | 32K | 2K | 1 |
-| $$Heap_{01}$$ | 34K | 3K | 1 |
-| $$Stack_{11}$$ | 28K | 2K | 0 |
+|    Segment     | Base  | Size(max 4K) | Grows positive? |
+| :------------: | :---: | :----------: | :-------------: |
+| $$Code_{00}$$  |  32K  |      2K      |        1        |
+| $$Heap_{01}$$  |  34K  |      3K      |        1        |
+| $$Stack_{11}$$ |  28K  |      2K      |        0        |
 
 Ahora que el hardware conoce que segmentos pueden crecer de forma negativa, ahora traduce las direcciones virtuales de forma diferente. Tomamos un ejemplo de direccion virtual del *stack* y la traducimos.
 <br>Asumamos que queremos acceder a la direccion virtual 15KB, la cual debe ser mapeada en la direccion fisica 27KB. Nuestra direccion virtual, en binario es 11 1100 0000 0000 (en hexa 0x3C00). El hardware usa los primeros dos bits (11)para designar el segmento, pero entonces estamos dejando un *offset* de 3KB. Para obtener el *offset* negativo, debemos restarle a los 3KB el tamaño maximo del segmento: En el ejemplo, un segmento puede ser de 4KB, por lo que el *offset* negativo es 3KB menos 4KB, lo cual es igual a -1KB. Simplemente sumamos el *offset* negativo a la base (28KB) para llegar a la direccion fisica: 27KB. La verificacion del limite la puede calcular asegurando que el valor absoluto del *offset* negativo es menor o igual que el tamaño del segmento actual (en este caso, 2KB).
@@ -1012,14 +1015,14 @@ movl  <virtual address>,  %eax
 Especificamente, prestemos atencion a la carga explicita de los datos de la direccion `<virtual address>` en el registro `eax`.
 <br>Para **Traducir** esta direccion virtual que genero el proceso, primero tenemos que dividirla en dos componentes: El **Numero de Pagina Virtual** (***Virtual Page Number***) (**VPN**), y el **Offset** en la pagina. Para este ejemplo, dado que el *address space* es de 64 bytes, necesitamos 6 bits en total para nuestra direccion virtual ($2^{6}=64$). Por lo tanto, nuestra memoria virtual puede ser conceptualizada asi:
 
-| Va5 | Va4 | Va3 | Va2 | Va1 | Va0 |
-|:---:|:---:|:---:|:---:|:---:|:---:|
+|  Va5  |  Va4  |  Va3  |  Va2  |  Va1  |  Va0  |
+| :---: | :---: | :---: | :---: | :---: | :---: |
 
 Va5 es el bit mas significativo de la direccion virtual, y Va0 es el bit menos significativo. Dado que sabemos el tamaño de la pagina (16 bytes), podemos dividir la direccion virtual asi:
 
-| Va5 | Va4 | Va3 | Va2 | Va1 | Va0 |
-|:---:|:---:|:---:|:---:|:---:|:---:|
-| VPN | VPN | *offset* | *offset* | *offset* | *offset* |
+|  Va5  |  Va4  |   Va3    |   Va2    |   Va1    |   Va0    |
+| :---: | :---: | :------: | :------: | :------: | :------: |
+|  VPN  |  VPN  | *offset* | *offset* | *offset* | *offset* |
 
 El tamaño de la pagina es de 16 bytes en un address space de 64 bytes; por lo que necesitamos ser capaces de seleccionar 4 paginas, y los primeros 2 bits de la direccion hacen justamente eso. Por lo tanto, tenemos una VPN de 2 bits. Los bits restantes nos dicen en que bytes de la pagina estamos interesados, 4 bits en este caso; esto lo llamos *offset*.
 <br>Cuando un proceso genera una direccion virtual, el SO y el hardware deben comunicarse para traducirla en una direccion fisica. Por ejemplo, asumamos que la carga anterior es la direccion virtual 21:
@@ -1030,9 +1033,9 @@ movl  21,  %eax
 
 Pasanod 21 a binario, tenemos 010101, y por lo tanto podemos examinar esta direccion virtual y ver como se descompone en Numeros de Pagina Virtual (VPN) y *offset*:
 
-| 0 | 1 | 0 | 1 | 0 | 1 |
-|:---:|:---:|:---:|:---:|:---:|:---:|
-| VPN | VPN | *offset* | *offset* | *offset* | *offset* |
+|   0   |   1   |    0     |    1     |    0     |    1     |
+| :---: | :---: | :------: | :------: | :------: | :------: |
+|  VPN  |  VPN  | *offset* | *offset* | *offset* | *offset* |
 
 Por lo tanto, la direccion virtual 21 esta en el quinto byte (0101) de la pagina 01. Con nuestra VPN, podemos indexar nuestra *page table* y encontrar en que *frame* fisico recide la pagina virtual 1. En la *page table* de arriba el **Numero de Frame Fisico** (***Physical Frame Number***) (**PFN**) o **Numero de Pagina Fisica** (***Physical Page Number***) (**PPN**) es 7 (111). Por lo tanto, podemos traducir esta direccion virtual reemplazando el VPN con el PFN y entonces emitir la carga de memoria fisica.
 
@@ -1118,8 +1121,8 @@ El SO debe tener cuidado de no causar un loop de *TLB misses* (por ejemplo, el *
 
 Un TLB tipico debe tener 32, 64 o 128 entradas y debe ser lo que se llama **Completamente Asociativo**. Basicamente, esto significa que cualquier traduccion dada puede estar en cualquier lugar del TLB, y el hardware debe buscar en todo el TLB en paralelo para encontrar la traduccion deseada. La entrada de TLB se ve algo asi:
 
-| VPN | PFN | *other bits* |
-|:---:|:---:|:---:|
+|  VPN  |  PFN  | *other bits* |
+| :---: | :---: | :----------: |
 
 Entre esos *Other Bits* suele incluirse:
 * ***Valid Bit*** que indica si una entrada tiene una traduccion valida para esa direccion de memoria virtual o no.
@@ -1136,12 +1139,12 @@ El TLB contiene traducciones virtuales a fisicas que son validas solo para el pr
 <br>Ejemplo, cuando un proceso (P1) se esta ejecutando, se asume que el TLB esta guardando en cache las traducciones que son validas para P1, o sea, vienen de la *page table* de P1. Asumamos que la decima pagina virtual de p1 es mapeada al *frame* fisico 100.
 <br>Asumamos que existe otro proceso (P2), y que el SO decide hacer un *context switch* y ejecutarlo. Asumamos que la decima pagina virtual de P2 es mapeada al *frame* fisico 170. Si las entradas de ambos procesos estan en la TLB, el contenido de la TLB seria:
 
-| VPN | PFN | valid | prot |
-|:---:|:---:|:---:|:---:|
-| 10 | 100 | 1 | rwx |
-| -- | -- | 0 | -- |
-| 10 | 170 | 1 | rwx |
-| -- | -- | 0 | --- |
+|  VPN  |  PFN  | valid | prot  |
+| :---: | :---: | :---: | :---: |
+|  10   |  100  |   1   |  rwx  |
+|  --   |  --   |   0   |  --   |
+|  10   |  170  |   1   |  rwx  |
+|  --   |  --   |   0   |  ---  |
 
 VPN 10 se traduce a PFN 100 (P1) y PFN 170 (P2), pero el hardware no puede distringuir que entrada es significativa para que proceso. Cuando se produce un *context switch* entre procesos, las traducciones en la TLB para el ultimo proceso no son significativas para el proceso a punto de ejecutarse.
 <br>Para solucionar este problema, un enfoque es limpiar la TLB en un *context switch*, se setean todos los bits validos a 0.
@@ -1149,22 +1152,22 @@ VPN 10 se traduce a PFN 100 (P1) y PFN 170 (P2), pero el hardware no puede distr
 <br>Para reducir el costo, los sistemas agregan soporte de hardware para permitiri compartir el TLB a traves de los *context switch*. Especificamente, se provee un campo ***Adress Space Identifier*** (**ASID**) (**Identificador de Espacio de Direcciones**) en el TLB.
 <br>Si tomamos el ejemplo anterior y le agregamos el ASID:
 
-| VPN | PFN | valid | prot | ASID |
-|:---:|:---:|:---:|:---:|:---:|
-| 10 | 100 | 1 | rwx | 1 |
-| -- | -- | 0 | -- | -- |
-| 10 | 170 | 1 | rwx | 2 |
-| -- | -- | 0 | -- | -- |
+|  VPN  |  PFN  | valid | prot  | ASID  |
+| :---: | :---: | :---: | :---: | :---: |
+|  10   |  100  |   1   |  rwx  |   1   |
+|  --   |  --   |   0   |  --   |  --   |
+|  10   |  170  |   1   |  rwx  |   2   |
+|  --   |  --   |   0   |  --   |  --   |
 
 Por lo tanto, con los ASIDs podemos mantener traducciones de diferentes procesos al mismo tiempo sin confundirlos.
 <br>Hay otro caso donde dos entradas del TLB son similares. Si hay dos entradas para dos procesos diferentes con dos diferentes VPN que apuntan a la misma pagina fisica:
 
-| VPN | PFN | valid | prot | ASID |
-|:---:|:---:|:---:|:---:|:---:|
-| 10 | 101 | 1 | rwx | 1 |
-| -- | -- | 0 | -- | -- |
-| 50 | 101 | 1 | rwx | 2 |
-| -- | -- | 0 | -- | -- |
+|  VPN  |  PFN  | valid | prot  | ASID  |
+| :---: | :---: | :---: | :---: | :---: |
+|  10   |  101  |   1   |  rwx  |   1   |
+|  --   |  --   |   0   |  --   |  --   |
+|  50   |  101  |   1   |  rwx  |   2   |
+|  --   |  --   |   0   |  --   |  --   |
 
 En este caso puede surgir cuando dos procesos comparten una pagina. En el ejemplo, el proceso 1 esta compartiendo la pagina fisica 101 con el proceso 2; P1 mapea esta pagina en la decima pagina de su *address space*, y P2 mapea la Quincuagésimo (50) pagina de su *address space*.
 
@@ -1290,7 +1293,7 @@ Hasta ahora suponiamos que las *page tables* estaban en memoria del kernel, pero
 
 ### ¡¡¡Ejemplos Practicos!!!
 
-Recordar que son estructuras de datos que, a partir de una direccion virtual de 32 bits (arriba), permiten generar una direccion fisica de 32 bits (63 su se usa PAE (***Physical Addres Extension***)).
+Recordar que son estructuras de datos que, a partir de una direccion virtual de 32 bits (arriba), permiten generar una direccion fisica de 32 bits (64 si se usa PAE (***Physical Addres Extension***)).
 
 ![](../Teorico-practico/imagenes/EjemploPractico.png)
 * *Page Table* 10/22 (de un nivel) para paginas de 4MB.
