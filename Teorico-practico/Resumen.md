@@ -1173,3 +1173,139 @@ En este caso puede surgir cuando dos procesos comparten una pagina. En el ejempl
 La memoria cache son veloces pero pequeñas. Si para insertar una nueva entrada en la TLB es necesario reemplazar una vieja, se debe elegir una politica para realizar ese ***Cache Replacement***. La idea siempre es bajar el porcentaje de *TLB miss*; puede elegirse borrar la que mas tiempo lleva sin usarse (**LRU**: ***Least Recently Used***) para tratar de mantener la localidad temporal, o simplemente borar una *Aleatoria*, que no presenta casos borde como LRU (por ejemplo, ante un recorrido en loop de un *array* que no entre en la TLB).
 
 ## Capitulo 20: Tablas de Paginacion Mas Pequeñas
+
+Un problema ya mencionado es que las *page tables* ocupan mucho espacio en memoria, y cada proceso tiene su *page table*. La idea es administrar la memoria de manera mas eficiente, reduciendo el *overhead* de mantener una sola gran *page table*.
+
+### Solucion Simple: Paginas Mas Grandes
+
+Una forma facil de resolverlo seria usando paginas mas grandes, pero estas generarian un gran desperdicio de espacio dentro de las paginas cuando un proceso requiere de poca memoria, llevando a **Fragmentacion Interna**.
+
+### Enfoque Hibrido: Paginas y Segmentos
+
+La idea es combinar Paginacion y Segmentacion. Se puede ver que esto funciona examinando una *page table* lineal. Asumamos que tenemos un *address space* en el cual las porciones de *heap* y *stack* usadas son chicas. Por ejemplo, usamos un *address space* de 16KB con 1KB de paginas:
+
+![](../Teorico-practico/imagenes/EjemploEnfoqueHibrido.png)
+
+La *page table* para este *address space* es:
+
+![](../Teorico-practico/imagenes/PageTableDelEnfoqueHibrido.png)
+
+Se asume que la unica pagina de codigo (VPN 0) esta mapeada a la pagina fisica 10, el *heap* de una sola pagina (VPN 4) a la pagina fisica 23, y el *stack* de dos paginas en el otro extremo del *address space* (VPN 14 y 15) estan mapeadas a la pagina fisica 28 y 4 respectivamente. Como se puede ver gran parte de la *page table* esta sin usar, llena de entradas invalidas.
+<br>Por lo tanto, el enfoque hibrido: En vez de tener una sola *page table* para el *address space* entero del proceso, ¿Porque no tener una por cada segmento logico? En ele ejemplo, se podrian tener tres *pages table*, una para el *1*, otra para el *stack* y una ultima para el *heap*.
+<br>Pero en Segmentacion tenemos un registro base que nos dice donde vive cada segmento en la memoria fisica, y un registro limite que nos dice el tamaño de cada segmento. En el enfoque hibrido, seguimos teniendo esa estructura en la MMU, la diferencia, es que aca usamos la base para mantener el *address space* de la *page table* de cada segmento. El limite es usado para indicar el final de la *page table* (osea, cuantas paginas validas tiene).
+
+Ejemplo, asumamos un *address space virtual* de 32 bits con 4KB de paginas, y un *address spaces* dividido en cuatro segmentos. Solo usaremos tres segmentos para el ejemplo, *code*, *stack* y *heap*.
+<br>Para determinar a que segmento se refiera una direccion usaremos los primeros dos bits del *address space*. Asumamos que el 00 es el segmento sin usar, el 01 para el *code*, el 10 para el *heap*, y el 11 para el *stack*. Por lo que, una direccion virtual se veria algo asi:
+
+![](../Teorico-practico/imagenes/DireccionVirtualHibrida.png)
+
+Asumamos que en el hardware hay tres pares de base-limite una para cada una de las partes (*code*, *heap*, *stack*). Cuando un proceso se esta ejecutando, el registro base de cada uno de esos segmentos contiene la direccion fisica de una *page table* lineal para cada segmento; por lo que, cada proceso en el sistema ahora tiene tres *page tables* asociadas. En un *context switch*, estos registrso deben ser cambiados para reflejar la ubicacion de las *page tables* de nuevos procesos.
+
+La diferencia mas importantes en el esquema hibrido es la presencia del registro limite por segmento; Cada registro limite mantiene el valor de la cantidad maxima de pagina valida en el segmento. Por ejemplo, si en el segmento del codigo esta usando las primeras tres paginas (0, 1 y 2), la *page table* del segmento del codigo tendra solo tres entradas y el registro limite sera seteado en 3; los accesos a memoria mas alla del final del segmento generaran una excepcion y se terminara la ejecucion del proceso.
+<br>Pero, notar que este enfoque tambien tiene problemas.
+* Requiere el uso de segmentacion; la segmentacion no es tan flexible, ya que asume un patron de uso del *address space*; si tenemos un *heap* grande pero poco usado, aun podemos terminar con una gran cantidad de desperdicion de *page table*.
+* Causa Fragmentacion Externa.
+
+### *Page Tables* Multinivel
+
+Este enfoque no usa Segmentacion. Este enfoque lo llamamos ***Page Table MultiNivel***, convierte la *page table* lineal en algo parecido a un arbol.
+<br>Primero, se divide la *page table* en unidades de tamaño de una paginas; entonces, si una pagina entera de una PTE es invalida, no asignamos esa pagina a la *page table*. Para rastrear si una pagina de la page table es valida o no, usamos una nueva estructura, llamada ***Page Directory***. La *Page Directory* puede ser usada para que nos diga donde esta una pagina de la *page table* o si toda la pagina de la *page table* contiene paginas no validas.
+
+![](../Teorico-practico/imagenes/PageTableMultiNivel.png)
+
+A la izquierda hay una *page table* lineal; aunque mas de la mitad de las regiones no son validas, aun necesita un espacio de la *page table* para esas regiones. A la derecha hay una *page table multinivel*. La *page directory* marca solo dos paginas de la *page table* como validas; por lo que, solo esas dos paginas de la *page table* estan en la memoria.
+<br>La *page directory* contiene una entrada para cada pagina de la *page table*. Consiste de un numero de ***Page Directory Entry*** (**PDE**). Una PDE tiene un ***Valid Bit*** y un PFN. Pero, el significado del *valid bit* es diferente: Si la PDE es valida, significa que al menos una de las paginas a las que apunta la *page* es valida, o sea, en al menos una PTE de la pagina apuntada por esa PDE, el *valid bit* esta seteado en uno. Si la PDE no es valida, del resto de los PDE no estan definidos.
+
+La *Page Tables MultiNivel* tiene algunas ventajas sobre los enfoques anteriores:
+* La pagina multinivel solo asigna espacio de *page table* en proporcion a la cantidad de *address space* que estes usando; por lo que es compacta y soporta *address spaces* poco usado.
+* Cada porcion de la *page table* encaja perfectamente dentro de una pagina, haciendo facil de manejar la memoria.
+
+Notar que tiene un costo; en un *TLB miss*, se necesitara dos cargas de memoria; primero al *page directory* y luego a la *page table*. Esto es un ejemplo de ***trade off***, ganamos memoria pero perdemos mucho mas tiempo en un *TLB miss*.
+
+### Ejemplo Detallado
+
+Imaginemos un *address space* de 16KB, con paginas de 54 bytes. Por lo que tenemos un *addres space virtual* de 14 bits, con 8 bits para la VPN y 6 bits de *offset*. Una pagina lineal deberia tener $2^{8}$ (256) entradas.
+
+![](../Teorico-practico/imagenes/EjemploDetallado.png)
+
+Las paginas virtuales 0 y 1 son para el *code*, las 4 y 5 para el *heap* y las 254 y 255 para el *stack*; el resto de las paginas del *address space* estan sin usar.
+<br>Para construir una page table de dos niveles, empezamos con la *page table* lineal y la separamos en unidades de tamaño de una pagina; asumamos que cada PTE es de 4 bytes. Por lo que nuestra *page table* es de 1KB. Dado que tenemos 64 bytes de paginas, la pagina de 1KB puede ser dividad en 16 paginas de 64 bytes; cada pagina puede tener 16 PTEs.
+<br>Se necesita entender como tomar el VPN y usarlo para indexar dentro la *page directory* y entonces dentro de la pagina de la *page table*. Como cada una es un *array* de entradas; entonces, todo lo que se necesita saber es como armar un indice para cada una de las piezas de la VPN.
+<br>Primer indexamos dentro de la *page directory*. Nuestra *page table*: 256 entradas acomodadas a lo largo de 16 paginas. Como resultado, necesitamos 4 bits para la VPN para indexar dentro de la *page directory*, para eso usaremos los primeros 4 bits para el VPN:
+
+![](../Teorico-practico/imagenes/EjemploDetallado2.png)
+
+Una vez que extraemos el ***page directory index*** (**PDI**) de la VPN, podemos usarlo para encontrar la direccion de la PDE con el siguiente calculo:
+
+```
+PDEAddr = PageDireBase + (PDI * sizeoff(PDE))
+```
+
+Este resultado es nuestra *page directory*.
+<br>Si la entrada de la *page directory* es valida, tenemos que buscar la PTE desde la pagina de la *page table* apuntada por esta PDE. Para encontrar esta PT, tenemos que indexar en la porcion de la page table usando el resto de los bits de la VPN:
+
+![](../Teorico-practico/imagenes/EjemploDetallado3.png)
+
+Este PTI puede ser usado para indexar dentro de la *page table*, dandonos la direccion de nuestra PTE:
+
+```
+PTEAddr = (PDE.PFN << SHIFT) + (PTI * sizeof(PTE))
+```
+
+Notar que el PFN obtenido de la PDE debe ser shifteado a la izquierda antes de combinarlo con el indice de la *page table* para formar la direccion de la PTE.
+<br>Para ver si esto tiene sentido, vamos a llebar una pagina multinivel con algunos valores, y los traduciremos en una direccion virtual. Empecemos con la *page directory* para este ejemplo.
+
+![](../Teorico-practico/imagenes/EjemploDetallado4.png)
+
+Podemos ver que cada PDE describe algo sobre una pagina de la *page table* para el *address space*. Tenemos dos regiones validas en el *address space* (al inicio y al final), y un par de mapeos invalidos entre ellas.
+<br>En la pagina 100 (el PFN de la primer pagina de la *page table*), tenemos la primer pagina de 16 entradas de la page table para las primeras 16 VPNs en el *address space*.
+<br>Esta pagina de la *page table* contiene el maep de las primeras 16 VPN; las VPNs 0 y 1 son validas (segmento del *code*), y tambien la 4 y 5 (el *heap*). Por lo que, la *table* tiene la informacion mapeada para cada una de esas paginas.
+<br>La otra pagina valida de la *page table* esta dentro del PFN 101. Esta pagina contiene los mapeos para los ultimos 16 VPNs del *address space*.
+<br>Los VPNs 245 y 255 (el *stack*) tienen mapeos validos. Podemos ver cuanto espacio es posible ahorrar con una estructura multinivel. En vez de alojar las 16 paginas de una *page table* lineal, alojamos solamente tres.
+<br>Finalmente, usamos esta informacion para hacer una traduccion. Aca hay una direccion que refiere al primer byte de la VPN 254: `0x3F80` o `11 1111 1000 0000` en binario.
+<br>Recordemos que usamos los primeros 4 bits del VPN para indexar dentro de la *page directory*. Por lo que, `1111` (15) elegira la ultima entrada de la *page directory*. Estos nos apunta a una pagina valida de la *page table* ubicada en la direccion `101`. Entonces usamos los siguientes 4 bits del VPN (`1110`) para indexar dentro de esa pagina de la *page table* y encontrar la PTE deseada. `1110` es justo arriba de la ultima entrada (14) en la pagina, y nos dice que la pagina 254 de nuestro *address space virtual* esta mapeada en la pagina fisica 55. Concatenamos el PFN = 55 (`0x37`) con el *offset* = 000000, podemos formar la direccion fisica deseada y emitir la peticion al sistema de mmeoria.
+
+```
+PhysAddr = (PTE.PFN << SHIFT) + offset = 00 1101 1100 0000 = 0x0DC0
+```
+
+### Mas de Dos Niveles
+
+En el ejemplo anterior, asumimos que una *page table* solo tiene dos niveles. Pero en algunos casos, es posible un arbol de mas niveles.
+<br>Ejemplo, asumamos que tenemos un *address space virtual*, y una pagina de 512 bytes. Por lo que nuestra direccion virtual tiene una VPN de 21 bits y un offset de 9 buts.
+<br>Para determinar cuantos niveles hacen falta en una tabla multinivel para hacer que todas las piezas de una *page table* entren en una pagina, empezamos determinando cuantas PTEs entran en una pagina. Dado que nuestro tamaño de pagina de 512 bytes, y asumiendo un PTE de 4 bytes, vemos que podemos tener 128 PTEs en una sola pagina. Cuando indexamos en una pagina de la *page table*, podemos concluir que necesitamos los 7 bits menos significativos ($log_{2}128$) de la VPN como indice:
+
+![](../Teorico-practico/imagenes/MasDeDosNiveles.png)
+
+Notar cuantos bits quedan en la *page directory*: 14. Si nuestra *page directory* tiene $2^{14}$ entradas, no ocupa una pagina, si no 128, y por lo tanto nuestro objetivo de hacer que cada pieza de una *page table* multinivel entre en una pagina falla.
+<br>Para solucionar este problema, se construye un nivel mas en el arbol, dividiendo el mismo *page directory* en multiples paginas, y agregando otro *page directory* encima de ese, para apuntar a las paginas del *page directory*:
+
+![](../Teorico-practico/imagenes/MasDeDosNiveles2.png)
+
+Ahora cuando se indexa en el nivel mas alto del *page directory*, usamos los bits mas significativos de la direccion virtual; este indice puede ser usado para encontrar la PDE del *page directory* de mas alto nivel. Si es valido, el segundo nivel del *page directory* es consultad con la combinacion del PFN de la PDF de mayor nivel y la siguiente parte de la VPN. Finalmente, si es valido, la direccion de la PTE puede ser formada usando el indice de la *Page Table* combinado con la direccion de la PDE de segundo nivel.
+
+### Swapear *Page Tables* al disco
+
+Hasta ahora suponiamos que las *page tables* estaban en memoria del kernel, pero incluso con todos estos "trucos", las *page tables* puede ser demasiado grandes para entrar en memoria todas al mismo tiempo. Cuando esto pasa, algunas se colocan en **Memoria Virtual del Kernel**, permitiendo **Pasar** (***Swapear***) algunas de estas *page tables* al disco cuando hay poca memoria. Claramente, este *swap* introduce una penalizacion de tiempo grande, ya que si un proceso intenta leer memoria virtual de su *address space* y esta no esta en la RAM, se genera un ***Page Fault*** y la misma debe ser traida desde el disco.
+
+### ¡¡¡Ejemplos Practicos!!!
+
+Recordar que son estructuras de datos que, a partir de una direccion virtual de 32 bits (arriba), permiten generar una direccion fisica de 32 bits (63 su se usa PAE).
+
+![](../Teorico-practico/imagenes/EjemploPractico.png)
+* *Page Table* 10/22 (de un nivel) para paginas de 4MB.
+
+![](../Teorico-practico/imagenes/EjemploPractico2.png)
+* *Page Table* 10/10/12 (de dos niveles) para paginas de 4KB, de un i386 (x86).
+
+* **CR3**: Registro especial de 32 bits que es solo modificable en modo kernel, apunta a la base de la tabla de *Page Directory*. Los ultimos 12 bits (3 hexa) del CR3 siempre son 0 (en hexa) porque siempre debe estar alineado a saltos de 4KB.
+* ***Page Directory***: Tabla que tiene 1024 entradas, cada una de 32 bits (4 bytes). 1024 x 32 bits = 4KB lo cual es el tamaño de la tabla. Para direccionar esas 1024 entradas son necesarios los 10 bits mas significativos de la direccion virtual ($2^{10} = 1024$).
+<br>La entrada seleccionada es un puntero que define la base de la *page table* (su posicion 0 ya que crece de forma negativa, o sea, la posicion desde la cual se comienza a contar (descontar) para usar el proximo indice).
+* ***Page Table***: Tabla de 1024 entradas de 32 bits, cuya base esta dada por el puntero de la *page directory*, y cuyo indice esta dado por los 10 bits que le siguen a los usados por la *page directory*. La entrada seleccionada es un puntero (20 bits) que indican la base de la pagina fisica que se va a usar.
+* ***Memory Page***: Es la pagina fisica que se va a leer, cuya base esta dada por la *page table*. Tiene 4KB entradas, para lo cual son necesarios los 12 bits menos significativos (llamados *offset*) de la direccion virtual ($2^{12} = 4KB$) para seleccionar la pagina.
+
+Recordar que una pagina no puede contener segmentos (*heap*, *stack*, *code*) de distintos tipos para proteger a cada uno de manera adecuada.
+<br>En un sistema con paginas lineales puede que una *page table* corresponda a un proceso. En uno de paginas multinivel hay todo un directorio por cada proceso, el cual puede tener una o mas tablas.
+
+![](../Teorico-practico/imagenes/EjemploPractico3.png)
+
