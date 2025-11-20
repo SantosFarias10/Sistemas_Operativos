@@ -697,7 +697,7 @@ Ejemplo: Asumamos que queremos ubicar el *address space* de la imagen anterior e
 
 Se puede ver una memoria fisica de 64KB con tres segmentos en ella (hay 16KB reservados para el SO).
 <br>Solo la memoria que es usada tiene asignado un espacio en la memoria fisica, y por lo tanto, *address spaces* mas grandes con mas cantidad de *adress space* no usadas (llamados ***Sparse Address Space*** (**Espacios de Direcciones Escasos**)) se pueden acomodar.
-<br>Lo que se esper que que la estructura de hardware de nuestra MMU requiera soporte de semgmentacion: En este caso, un conjunto de tres pares de registrso base-limites.
+<br>Lo que se esper que que la estructura de hardware de nuestra MMU requiera soporte de semgmentacion: En este caso, un conjunto de tres pares de registros base-limites.
 
 | Segmentos | Base  | Tamaño |
 | :-------: | :---: | :----: |
@@ -1202,7 +1202,7 @@ Ejemplo, asumamos un *address space virtual* de 32 bits con 4KB de paginas, y un
 
 ![](../Teorico-practico/imagenes/DireccionVirtualHibrida.png)
 
-Asumamos que en el hardware hay tres pares de base-limite una para cada una de las partes (*code*, *heap*, *stack*). Cuando un proceso se esta ejecutando, el registro base de cada uno de esos segmentos contiene la direccion fisica de una *page table* lineal para cada segmento; por lo que, cada proceso en el sistema ahora tiene tres *page tables* asociadas. En un *context switch*, estos registrso deben ser cambiados para reflejar la ubicacion de las *page tables* de nuevos procesos.
+Asumamos que en el hardware hay tres pares de base-limite una para cada una de las partes (*code*, *heap*, *stack*). Cuando un proceso se esta ejecutando, el registro base de cada uno de esos segmentos contiene la direccion fisica de una *page table* lineal para cada segmento; por lo que, cada proceso en el sistema ahora tiene tres *page tables* asociadas. En un *context switch*, estos registros deben ser cambiados para reflejar la ubicacion de las *page tables* de nuevos procesos.
 
 La diferencia mas importantes en el esquema hibrido es la presencia del registro limite por segmento; Cada registro limite mantiene el valor de la cantidad maxima de pagina valida en el segmento. Por ejemplo, si en el segmento del codigo esta usando las primeras tres paginas (0, 1 y 2), la *page table* del segmento del codigo tendra solo tres entradas y el registro limite sera seteado en 3; los accesos a memoria mas alla del final del segmento generaran una excepcion y se terminara la ejecucion del proceso.
 <br>Pero, notar que este enfoque tambien tiene problemas.
@@ -1325,8 +1325,8 @@ PAE permite direccionar mas de 4GB de memoria fisica ($2^{32}$ bytes, limite del
 
 ## Capitulo 26: Introduccion a la Concurrencia
 
-Se introduce una nueva abstraccion para un proceso en ejecucion: El **Hilo** (***Thread***). Un programa de **Hilos-Multiples** (***Multi-Threaded***) tiene mas de un punto de ejecucion; cada hilo es un subproceso en su mismo que avanza de manera asincrona, pero compartiendo todos un mismo *address space* (o sea comparten *heap* y *code*).
-<br>Cada hilo mantiene su propio PC, registrso y memoria *stack* (***Thread Local Storage***), por lo que ante un cambio de contexto estos deben ser guardados y restaurados. Los diferentes bloques *stack* se almacenan en un mismo *address space* del proceso. Por ello, si el context switch es entre dos hilos del mismo proceso, se usa un ***Thread Control Block*** (**TCB**). en lugar de un PCB, manteniendo *address space* y por lo tanto la *page table* (las traducciones de la TLB todavia podrian servir), lo cual mejora el desempeño.
+Se introduce una nueva abstraccion para un proceso en ejecucion: El **Hilo** (***Thread***). Un programa de **Hilos-Multiples** (***Multi-Threaded***) tiene mas de un punto de ejecucion; cada hilo es un subproceso en si mismo que avanza de manera asincrona, pero compartiendo todos un mismo *address space* (o sea comparten *heap* y *code*).
+<br>Cada hilo mantiene su propio PC, registros y memoria *stack* (***Thread Local Storage***), por lo que ante un cambio de contexto estos deben ser guardados y restaurados. Los diferentes bloques *stack* se almacenan en un mismo *address space* del proceso. Por ello, si el context switch es entre dos hilos del mismo proceso, se usa un ***Thread Control Block*** (**TCB**). en lugar de un PCB, manteniendo *address space* y por lo tanto la *page table* (las traducciones de la TLB todavia podrian servir), lo cual mejora el desempeño.
 
 ### Ventajas de Usar Hilos
 
