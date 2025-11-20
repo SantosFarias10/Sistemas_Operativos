@@ -1324,3 +1324,28 @@ PAE permite direccionar mas de 4GB de memoria fisica ($2^{32}$ bytes, limite del
 # Concurrencia
 
 ## Capitulo 26: Introduccion a la Concurrencia
+
+Se introduce una nueva abstraccion para un proceso en ejecucion: El **Hilo** (***Thread***). Un programa de **Hilos-Multiples** (***Multi-Threaded***) tiene mas de un punto de ejecucion; cada hilo es un subproceso en su mismo que avanza de manera asincrona, pero compartiendo todos un mismo *address space* (o sea comparten *heap* y *code*).
+<br>Cada hilo mantiene su propio PC, registrso y memoria *stack* (***Thread Local Storage***), por lo que ante un cambio de contexto estos deben ser guardados y restaurados. Los diferentes bloques *stack* se almacenan en un mismo *address space* del proceso. Por ello, si el context switch es entre dos hilos del mismo proceso, se usa un ***Thread Control Block*** (**TCB**). en lugar de un PCB, manteniendo *address space* y por lo tanto la *page table* (las traducciones de la TLB todavia podrian servir), lo cual mejora el desempeño.
+
+### Ventajas de Usar Hilos
+
+* **Paralelismo**: Se puede dividir el trabajo en hilos, haciendolo mas rapido y eficiente (en caso de que el *overhead* no supere la ganancia). Convertir un programa ***Single-Threaded*** (de un hilo) a ***Multi-Thread*** es llamado **Paralelizacion**.
+* Evita **Bloquear** un programa en Espera de un I/O (lento); mientras un hilo espera, el CPU hace un ***Overlap*** (superpone) de tareas y puede ejecutar otra del mismo programa.
+<br>A diferencia de hacer ***Multiprogramming*** (Dividir una tarea en muchos procesos), al compartir *address space* es mas facil compartir informacion.
+
+### *Scheduling* y *Race Conditions*
+
+La Ejecucion de los procesos es administrada por el *scheduler* del SO, por lo que no se puede asumir que hilo se ejecutara en cada momento (incluso si uno es creado antes que otro); una vez llamado, cada uno se ejecuta de forma independiente del hilo que lo creo hasta retornar. Esto aumenta la complejidad general del funcionamiento del sistema, por lo que es preferible intentar minimizar las interacciones entre ellos.
+
+Si diferentes hilos comparten informacion da a lugar a errores. Por ejemplo, en el caso de dos hilos incrementando un contador; el primer hilo (hilo 1) puede modificar la variable, pero si antes de poder guardar el resultado, un *context switch* guarda el estado actual del proceso y corre el hilo 2 (el cual modifica la variable y guarda en memoria el nuevo valor) cuando vuelva a correr el hilo 1 este realizara la instruccion que anteriormente no pudo, guardando el valor del contador que el tenia, pisando el contenido y haciendo que el resultado sea diferente al esperado.
+<br>Esto es llamado una ***Race Condition*** (**Condicion de Carrera**) (o mas bien ***Data Race***) y genera resultados **Indeterministas**.
+
+Cuando mas de un hilo ejecuta una misma parte del codigo que contiene un recurso compartido, (por ejemplo, una variable o estructura de datos) y se genera una *race condition*, esa parte es llamada **Seccion Critica**. Como esas zonas no deberian ser ejecutadas al mismo tiempo por mas de un hilo, se busca asegurar una **Exclusion Mutua** que garantice el acceso de un solo hilo a la vez.
+
+### Atomicidad
+
+Una solucion que garantiza la exclusion mutua es tener instrucciones que, en un solo paso, se ejecuten por completo y remuevan asi la posibilidad de un *interrupt* intermedio. O sea, que sean **Atomicas**; que o bien la instruccion se ejecute hasta completarse, o bien no se ejecute.
+
+En general esto no es posible, por lo que, usando soporte del hardware y del SO, se construyen diferente **Primitivas de Sincronizacion**; codigo *multi-thread* en el que cada hilo accede a las secciones criticas de forma sincronizada y controlada, evitando las condiciones de carrera y asegurando la exclusion mutua.
+
