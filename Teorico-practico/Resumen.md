@@ -1402,3 +1402,63 @@ Hay dos rutinas principales:
 * `int pthread_cond_signal(pthread_cond_t *cond)`: Se ejecuta cuando un hilo cambio algo en el programa, y se manda una señal a la condicion señalada para desperar a los hilos que esperaban por la misma.
 * `pthread_cond_wait(cond, mutex)`: Asume que el hilo tiene un *lock* en su poder que debe ser liberado al dormir el proceso para que otros hilos/procesos lo puedan adquirir. El hilo cuando se despierte debe readquirir el *lock* para poder ejecutarse.
 <br>`pthread_cond_wait` debe liberar el lock y dormir el proceso de forma atomica, para evitar *race conditions*.
+
+## Capitulo 28: Locks
+
+Un ***lock*** es una **Primitiva de Sincronizacion** abstracta que cuenta con solo una variable y, debido a la naturaleza secuencial del programa, permite proteger una zona del codigo. Se declara la variable *lock* de algun tipo y la misma tiene el estado del *lock* en cualquier momento dado.
+<br>Puede estar ***Available***/**Disponible** (o ***Unlocked***, ***Free***), o sea ningun hilo tiene el *lock* en su posesion, o estar ***Acquired***/**Adquirido** (o ***Locked***, ***Held***), lo que significa que un hilo (y solo uno) tiene el *lock*.
+<br>Se pueden guardar otros datos en el *lock*, como que hilo tiene el *lock* en su poder (si lo hay), o una lista de los hilos en espera de adquirir el *lock*. Esta informacion esta oculta al usuario.
+
+La rutina `lock()` trata de adquirir el *lock* y, si ningun hilo lo tiene en su control (*is unlocked*), va a hacerlo y entrar a la zona critica. Este hilo es llamado **Dueño**/***Owner*** del *lock*. Si otro hilo llama a `lock()` con la misma variable *lock*, no va a volver y se va a quedar en un bucle intentado conseguirlo, previniendo asi que acceda a la zona critica.
+
+Los *locks* no otorgan control sobre el *scheduler*. Los hios son entidades creadas por el programador y administradas por el SO; cn los *locks* el usuario se asegura que solo un hilo pueda acceder a una seccion de codigo al mismo tiempo.
+
+### *Pthread Locks*
+
+La *POSIX library* llama ***mutex*** a los locks, y los usa para moveer exclusion mutua entre hilos.
+
+Las rutinas pasan variables a `lock()` y a `unlock()` porque pueden usarse diferentes *locks* para proteger diferentes zonas criticas. Esto aumenta la **Concurrencia** ya que en vez de un solo bloque grande que se *lockea* cada vez que se accede a cualquier zona critica en su interior (una estrategia de *lock* de **Grano Grueso**/***Coarse-Grained*** *lockin*), se pueden proteger diferentes datos y estructuras de datos con diferentes *locks*, permitiendo que mas hilos accedan al codigo a la vez (***Fine-Grained*** *locking*/de **Grano Fino**). Estas hacen uso de instrucciones provistas por el hardware para evitar *race conditions* que permitan que dos hilos obtengan un mismo *lock*.
+
+Un *lock* puede implementarse de distintas maneras, tanto con ayuda de hardware como solo mediante software, pero siempre deben cumplir con ser **Correctas** (proteger la region critica), **Justas** (evitar la *starvation* de hilos esperando entrar en una seccion) y tener un buen **Desempeño**. Algunas implementaciones:
+* #### Desactivar *Interrupts*
+Una solucion para asegurar la atomicidad en las secciones criticas es desactivar las interrupciones. Esto es efectivo pero solo funciona como solucion para sistemas mono core y ademas significa confiar en que los programas no abusen de esto, llamando a *lock* para monopolizar el CPU y haciendo que el SO pierda el control del sistema. Se usa solo de manera interna y en regiones pequeñas y puntuales del SO.
+
+* #### Usar solo *Loads/Store*
+Se puede intentar construir un *lock* sin desactivar las interrupciones, usando una variable *flag* para indicar si algun hilo tiene un *lock* en su posesion, y en caso de que asi sea, hacer ***Spin Wait*** (un bucle chequeando la condicion del *lock*) hasta que el *lock* sea liberado.
+<br>Esto tiene problemas tanto de *correctness* (exactitud) ya que por concurrencia dos hilos podrian adquirir el *lock*, y de *Perfomance* (desempeño) debido al alto coste de hacer *Sping Waiting*.
+
+Estos dos intentos fallidos muestran que es necesario el **Soporte del Hardware** para construir soluciones que garanticen la exclusion mutua.
+
+* #### *Spin Locks* con ***Test-And-Set***
+el hardware provee soporte para instrucciones ***Test-And-Set*** (***Atomic Exchange***)  atomicas.
+<br>*Test and Set* devuelve el valor viejo apuntando por `old_per`, y actuliza el valor con `new`. Con esta instruccion se puede construir un ***Spin Lock*** (usando *test-and-set* para chequear la condicion del *lock*, y solo saliendo del *spin-wait* si el valor viejo es 0).
+<br>El que se use *spin lock* para esperar a que el ***Owner*** libera el *lock* hace que sea necesario un ***Preemptive Scheduler***. Sim embargo, (y por mas que se garantice *correctness* y perfomance para sistemas multi core) se pueden generar problemas de ***Fairness*** con hilos en espera que pueden queda en *spin* indefinidamente.
+
+* #### *Compare-And-Swap*
+Otra primitiva soportada por hardware es ***Compare-And-Swap*** (**CaS**), o ***compare-and-exchange***. Esta se basa en comparar el valor de la direccion especificada por `ptr` con el esperado y, si lo es, actualizar la memoria señalada por `ptr` con el nuevo valor. Luego, devuelve el valor original, permitiendo a quien llamo a *compare-and-swap* saber si se actualizo o no algun valor.
+<br>Se puede generar un *lock* similar al de *test-and-set* usando *compare-and-swap* en el chequeo de condicion del loop. *Compare and Swap* es una instruccion mas poderosa que *test and set*, especialmente para algoritmos concurrentes que no usan *locks* (***Lock-Free Synchronization***).
+
+* #### *Load-Linked* y *Store-Conditional*
+Alguna plataformas **Desacoplan** las intrucciones anteriores (complejas) en dos mas sencillas que ayudan en la construccion de estructuras de concurrencia (como *locks*) para secciones criticas, ***Load-Linked*** (**ll**) y ***Store-Conditional*** (**SC**).
+<br>***Load-Linked*** toma un valor de memoria y lo coloca en un registro. ***Store-Conditional*** almacena en memoria el contenido de un registro, pero solo tiene exito si no hubo **Intervencion** de almacenamiento en esa direccion (un *Store*) luego de haber usado *Load-Link*. Si lo logra, devuelve 1, y si no 0, no actualiza el valor y devuelve 0 (detecta *race condition*).
+<br>Con `lock()`, un hilo puede hacer *spin wait* esperando que `flag=0` (que el *lock* esta libre) y cuando esto pasa intenta adquirir el *lock* a traves de ***Store-Conditional***. Si lo logra, el hilo cambia atomicamente el valor de la *flag* a 1 y entra en la seccion critica. Puede que mas de un hilo realice un *load-linked* y luego intente un *store-conditional*, debido a un *interrupt* y *context switch*, pero solo un *store conditional* lograra adquirir el lock, preservando la zona critica.
+
+* #### *Fetch-And-Add*
+Otra instruccion provista por el hardware es ***Feach-And-Add***, la cual atomicamente incrementa un valor mientras devuelve el valor viejo a una direccion particular.
+<br>Con ella se puede construir un ***Ticket Lock*** que usa una variable ***Ticke*** y turno combinados para construir el *lock*. Cuando un hilo quiere el *lock* hace un *fetch-and-add* atomico en el valor del ticket y ese valor se considera el turno (`myturn`) de dicho hilo. La variable global `lock` -> `turn` es usada para determinar el turno de que hilo es, y cuando `myturn == turn` el hilo entra a la seccion critica. El *unlock* aumenta el valor del turno, y asi el siguiente hilo en espera (si lo hay) puede entrar a la seccion critica. Este metodo asegura que todos los hilos progresen.
+
+### Demasiado *Spinning*
+Estos metodos son simples y funcionan, pero pueden ser ineficientes si la cantidad de hilos esperando por un *lock* es grande, desperdiciando tiempo de procesador en mucho *spinnig*.
+
+#### Enfoque Simple: *Just Yield* ("Ceda el Paso")
+Consiste en que el hilo haciendo *spin* ceda el CPU, con la esperanza de que se ejecute el hilo que libere el *lock* (o la condicion) que espera. Asumimos que tenemos `yield()` provisto por el SO. 
+<br>Este enfoque puede ser malo en *Perfomance*, ya que el costo del *context switch* para correr el siguiente hilo es alto (aunque menor que hacer *spinnig*) y no soluciona el problema de *starvation*.
+
+#### Enfoque con Colas: *Sleeping* en Vez de *Spinnig*
+Se puede ejercer control explicito sobre que gilo es el siguiente para adquirir el *lock* despues de que el actual lo libere, usando una cola con el **Orden** de los hilos que esperan el *lock* en modo *sleep*.
+<br>Debe ser hecho con cuidado, ya que un mal *timing* de *context switch* puede causar un ***Wakeup***/***Waiting Race*** y que un hilo termine durmiendo para siempre.
+
+#### Enfoque Hibrido: *Two-Phase Locks*
+En la primera fase el `lock()` hace ***Spin*** por un pequeño periodo de tiempo con la esperanza de obtener el *lock* (por si justo estaba por ser liberado, si la seccion critica era pequeña). Si no lo consigue rapido, entra en segunda fase y el hilo es puesto a **Dormir** hasta que se libere el *lock*.
+
+## Capitulo 30: Variables de Condicion
