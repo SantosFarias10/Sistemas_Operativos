@@ -1325,20 +1325,159 @@ PAE permite direccionar mas de 4GB de memoria fisica ($2^{32}$ bytes, limite del
 
 ## Capitulo 26: Introduccion a la Concurrencia
 
-Se introduce una nueva abstraccion para un proceso en ejecucion: El **Hilo** (***Thread***). Un programa de **Hilos-Multiples** (***Multi-Threaded***) tiene mas de un punto de ejecucion; cada hilo es un subproceso en si mismo que avanza de manera asincrona, pero compartiendo todos un mismo *address space* (o sea comparten *heap* y *code*).
-<br>Cada hilo mantiene su propio PC, registros y memoria *stack* (***Thread Local Storage***), por lo que ante un cambio de contexto estos deben ser guardados y restaurados. Los diferentes bloques *stack* se almacenan en un mismo *address space* del proceso. Por ello, si el context switch es entre dos hilos del mismo proceso, se usa un ***Thread Control Block*** (**TCB**). en lugar de un PCB, manteniendo *address space* y por lo tanto la *page table* (las traducciones de la TLB todavia podrian servir), lo cual mejora el desempeño.
+Introduciremos una nueva abstraccion para un solo programa en ejecucion: La de **Hilo** (***Thread***). En vez de nuestra clasica vision de un solo punto de ejecucion en un programa, un programa **Multi-Hilo** (***Multi-Threaded***) tiene mas de un punto de ejecucion. Otra forma de pensarlo es que cada hilo es mas como otro proceso separado, con una diferencia: Comparten el mismo *address space* y por lo tanto pueden acceder a los mismos datos.
+<br>El estado de un hilo es muy similar al de un proceso. Tiene un PC que rastrea de donde esta obteniendo instrucciones el programa. Cada hilo tiene su propio *set* de registros privados que tuliza para calculos; por lo tanto, si hay dos hilos que estan ejecutando en un solo procesador, cuando cambia de ejecutar T1 a ejecutar T2, se produce un *context switch*. El *context switch* entre hilos es muy similar al *context switch* entre procesos, como el estado de registros de T1 debe ser guardado y el estado de los registros de T2 deben ser restaurados antes de ejecutarlos. Con los procesos, guardabamos el estado en un **Bloque de Control de Procesos** (**PCB**); ahora, necesitamos uno o mas **Bloque de Control de Hilo** (**TCB**, ***Thread Control Block***) para guardar el estado de cada hilo de un proceso. La diferencia es que el *context switch* que hacemos entre hilos, en comparacion a los proces, es que el *address space* permanece igual (o sea, no es necesario cambiar la *page table* que estamos usando).
+<br>Otra diferencia entre hilo y proceso esta sobre el *stack*. El *address space* de un proceso (al que ahora se puede llamar **Proceso de un Hilo**), hay un solo *stack*, usualmente residiendo abajo del *address space*. Pero, en un proceso multi-hilo, cada hilo se ejecuta independientemente y pueden llamar a varias rutinas para hacer lo que tienen que hacer. En vez de un solo *stack* en el *address space*, habra uno por hilo.
+<br>Supongamos que tenemos un proceso multi-hilo que tiene dos hilos; el *address space* resultante de ve de la siguiente manera:
 
-### Ventajas de Usar Hilos
+![](../Teorico-practico/imagenes/AddressSpaceDiferente.png)
+
+Vemos que tenemos dos *stacks* esparcidos en el *address space* del proceso. Por lo que, cualquier asignacion en el *stack* de variables, parametros, valores de retorno, y mas cosas que estan en el *stack* sera ubicado en lo que llamamos *Thread-Local-Storage* (**ALmacenamiento del Hilo Local**), o sea, el satck del hilo relevante.
+
+### ¿Porque Usar Hilos?
 
 * **Paralelismo**: Se puede dividir el trabajo en hilos, haciendolo mas rapido y eficiente (en caso de que el *overhead* no supere la ganancia). Convertir un programa ***Single-Threaded*** (de un hilo) a ***Multi-Thread*** es llamado **Paralelizacion**.
-* Evita **Bloquear** un programa en Espera de un I/O (lento); mientras un hilo espera, el CPU hace un ***Overlap*** (superpone) de tareas y puede ejecutar otra del mismo programa.
+* Evita **Bloquear** un programa dado la lentitud de I/O; mientras un hilo espera, el planificador  de la CPU puede cambiar a otro hilo, el cual este listo para ejecutarse y hacer algo util. Los hilos permiten superposicion de I/O con otras actividades en un solo programa.
 <br>A diferencia de hacer ***Multiprogramming*** (Dividir una tarea en muchos procesos), al compartir *address space* es mas facil compartir informacion.
+
+### Ejemplo: Creacion de un Hilo
+
+Supongamos que queremos ejecutar un programa que crea dos hilos, y que cada uno haga un trabajo independiente, en este caso, imprime "`A`" o "`B`".
+
+```c
+#include <stdio.h>
+#include <assert.h>
+#include <pthread.h>
+#include "common.h"
+#include "common_threads.h"
+
+void *mythread(void *arg) {
+  printf("%s\n", (char *) arg);
+  return NULL;
+}
+
+int main(int argc, char *argv[]) {
+  pthread_t p1, p2;
+  int rc;
+  printf("main: begin\n");
+  Pthread_create(&p1, NULL, mythread, "A");
+  Pthread_create(&p2, NULL, mythread, "B");
+  // La funcion pthread_join espera a que el hilo termine
+  Pthread_join(p1, NULL);
+  Pthread_join(p2, NULL);
+  printf("main: end\n");
+  return 0;
+}
+```
+
+La funcion `main` crea dos hilos, los cuales ejecutan la funcion `mythread`, aunque con diferentes argumentos. Una vez que un hilo es creado, puede ejecutarse de inmediato, o ponerlo en la lista de *ready*.
+<br>Despues de crear los hilos, `main` llama a `Pthread_join`, que espera a que se complete la ejecucion de un hilo en particular.
+<br>Veamos el posible orden de ejecucion de este programa:
+
+![](../Teorico-practico/imagenes/EjemploEjecucion.jpg)
+
+El diagrama muestra una posible secuencia de ejecucion, pero no es la unica, ya que el planificador puede ejecutar los hilos en cualquier orden. Por ejemplo, una vez que se crea un hilo, se puede ejecutar directamente, lo cual dejaria el siguiente orden de ejecuion:
+
+![](../Teorico-practico/imagenes/EjemploEjecucion2.jpg)
+
+Tambien podriamos ver printeado B antes de A, o sea, digamos que el planificador decide ejecutar `T2` primero incluso si `T1` se creo antes; no hay razon para asumir que el hilo que se crea antes se ejecutara primero:
+
+![](../Teorico-practico/imagenes/EjemploEjecucion3.jpg)
+
+Una forma de ver la creacion de hilos es como hacer una llamada a una funcion, en vez de ejecutar la funcion y volver al llamador, el sistema crea un nuevo hilo de ejecucion para la rutina que esta siendo llamada, y se ejecuta independientemente del llamador, quizas antes de volver de la creacion, o quizas mucho despues.
+
+### ¿Porque se Vuelve Peor? Datos Compartidos
+
+El ejemplo anterior estuvo bueno porque mostraba como se crean los hilos y como se puede ejecutar en diferente orden dependiendo del planificador. Lo que no se mostro es como interactuan los hilos cuando comparten datos.
+<br>Imaginemos un ejemplo donde dos hilos quieren actualizar una variable global compartida:
+
+```c
+#include <stdio.h>
+#include <pthread.h>
+#include "common.h"
+#include "common_threads.h"
+
+static volatile int counter = 0;
+
+// mythread()
+//
+// Simplemente suma 1 al contador repetidamente, en un bucle
+// No, this is not how you would add 10,000,000 to
+// a counter, but it shows the problem nicely
+void *mythread(void *arg) {
+  printf("%s: begin\n", (char *) arg);
+  int i;
+  for (i = 0; i < 1e7; i++) {
+    counter = counter + 1;
+  }
+  printf("%s: done\n", (char *) arg);
+  return NULL;
+}
+
+// main()
+//
+// Simplemente lanza dos hilos (pthread_create)
+// y luego espera por ellos (pthread_join)
+//
+int main(int argc, char *argv[]) {
+  pthread_t p1, p2;
+  printf("main: begin (counter = %d)\n", counter);
+  Pthread_create(&p1, NULL, mythread, "A");
+  Pthread_create(&p2, NULL, mythread, "B");
+
+  // join espera a que los hilos terminen
+  Pthread_join(p1, NULL);
+  Pthread_join(p2, NULL);
+  printf("main: done with both (counter = %d)\n",
+  counter);
+  return 0;
+}
+```
+
+Notar que agrupamos la creacion de los hilos y las rutinas `join` para simplificar la salida en caso de un fallo; para un programa como este, queremos al menos notar cuando ocurre un error, pero no hacer nada inteligente (como salir xd). Por lo que, `pthread_create()` solo llama a `pthread_create()` y se asegura que el codigo de retorno sea cero, si no lo es, imprime un mensaje y sale.
+<br>Tambien en vez de usar dos funciones separadas para los hilos, usamos una solo bloque de codigo, y le pasamos al hilo un argumento para que impriman letras diferentes.
+<br>Finalmente, podemos ver que cada hilo esta tratando de sumar un numero a la variable compartida `counter`, y haciendolo 10 millones de veces. Por lo que, el resultado final deseado es 20 millones.
+<br>Ahora compilamos y ejecutamos el programa. A veces, se comporta como esperamos:
+
+```shell
+prompt> gcc -o main main.c -Wall -pthread; ./main
+main: begin (counter = 0)
+A: begin
+B: begin
+A: done
+B: done
+main: done with both (counter = 20000000)
+```
+
+Pero, cuando ejecutamos este programa, incluso en un solo procesodor, no necesariamente tnemos el resultado deceado:
+
+```shell
+prompt> ./main
+main: begin (counter = 0)
+A: begin
+B: begin
+A: done
+B: done
+main: done with both (counter = 19345221)
+```
+
+Lo ejecutamos una vez mas y obtenemos:
+
+```shell
+prompt> ./main
+main: begin (counter = 0)
+A: begin
+B: begin
+A: done
+B: done
+main: done with both (counter = 19221041)
+```
 
 ### *Scheduling* y *Race Conditions*
 
 La Ejecucion de los procesos es administrada por el *scheduler* del SO, por lo que no se puede asumir que hilo se ejecutara en cada momento (incluso si uno es creado antes que otro); una vez llamado, cada uno se ejecuta de forma independiente del hilo que lo creo hasta retornar. Esto aumenta la complejidad general del funcionamiento del sistema, por lo que es preferible intentar minimizar las interacciones entre ellos.
 
-Si diferentes hilos comparten informacion da a lugar a errores. Por ejemplo, en el caso de dos hilos incrementando un contador; el primer hilo (hilo 1) puede modificar la variable, pero si antes de poder guardar el resultado, un *context switch* guarda el estado actual del proceso y corre el hilo 2 (el cual modifica la variable y guarda en memoria el nuevo valor) cuando vuelva a correr el hilo 1 este realizara la instruccion que anteriormente no pudo, guardando el valor del contador que el tenia, pisando el contenido y haciendo que el resultado sea diferente al esperado.
+Si diferentes hilos comparten informacion da a lugar a errores. Por ejemplo (el ejemplo anterior), en el caso de dos hilos incrementando un contador; el hilo 1  puede modificar la variable, pero si antes de poder guardar el resultado, un *context switch* guarda el estado actual del proceso y corre el hilo 2 (el cual modifica la variable y guarda en memoria el nuevo valor) cuando vuelva a correr el hilo 1 este realizara la instruccion que anteriormente no pudo, guardando el valor del contador que el tenia, pisando el contenido y haciendo que el resultado sea diferente al esperado.
 <br>Esto es llamado una ***Race Condition*** (**Condicion de Carrera**) (o mas bien ***Data Race***) y genera resultados **Indeterministas**.
 
 Cuando mas de un hilo ejecuta una misma parte del codigo que contiene un recurso compartido, (por ejemplo, una variable o estructura de datos) y se genera una *race condition*, esa parte es llamada **Seccion Critica**. Como esas zonas no deberian ser ejecutadas al mismo tiempo por mas de un hilo, se busca asegurar una **Exclusion Mutua** que garantice el acceso de un solo hilo a la vez.
@@ -1346,8 +1485,10 @@ Cuando mas de un hilo ejecuta una misma parte del codigo que contiene un recurso
 ### Atomicidad
 
 Una solucion que garantiza la exclusion mutua es tener instrucciones que, en un solo paso, se ejecuten por completo y remuevan asi la posibilidad de un *interrupt* intermedio. O sea, que sean **Atomicas**; que o bien la instruccion se ejecute hasta completarse, o bien no se ejecute.
+<br> Algo atomico es indivisble. En concurrencia, una operacion Atómica es aquella que se ejecuta completamente, sin interrupciones, por lo que no puede ser interrumpida por otro hilo.
 
 En general esto no es posible, por lo que, usando soporte del hardware y del SO, se construyen diferente **Primitivas de Sincronizacion**; codigo *multi-thread* en el que cada hilo accede a las secciones criticas de forma sincronizada y controlada, evitando las condiciones de carrera y asegurando la exclusion mutua.
+<br>O sea, las primiticas de sincronizacion son mecanismos que provee el SO y el hardware para poder coordinar hilos.
 
 ## Capitulo 27: API de los Hilos
 
