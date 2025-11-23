@@ -31,6 +31,9 @@ Dios los bendiga 🚬
 
 ### [Concurrencia](#concurrencia)
 - [Capitulo 26: Introduccion a la Concurrencia](#capitulo-26-introduccion-a-la-concurrencia)
+- [Capitulo 27: API de los Hilos](#capitulo-27-api-de-los-hilos)
+- [Capitulo 28: Locks](#capitulo-28-locks)
+- [Capitulo 30: Variable de Condicion](#capitulo-30-variables-de-condicion)
 
 # Virtualizacion de la CPU
 
@@ -1491,6 +1494,155 @@ En general esto no es posible, por lo que, usando soporte del hardware y del SO,
 <br>O sea, las primiticas de sincronizacion son mecanismos que provee el SO y el hardware para poder coordinar hilos.
 
 ## Capitulo 27: API de los Hilos
+
+### Creacion de los Hilos
+
+Para crear un programa multi-hilo, primero es necesario crear nuevos hilos, por lo que debe existir alguna interfaz de creacion de hilos. En POSIX:
+
+```c
+include <pthread.h>
+int
+pthread_create(
+                pthread_t *thread, 
+                const pthread_attr_t *attr,
+                void *(*start_routine)(void*),
+                void *arg
+              );
+```
+
+`pthread_create()` toma 4 argumentos:
+* `thread` es un puntero a una estructura de tipo `pthread_t`; se usa esta estructura para interactuar con el hilo, por eso se la pasamos a la funcion para inicializarla.
+* `attr` es usado para especificar cualquier atributo que deba tener el hilo. Por ejemplo, setear el tamaño del *stack* o informacion sobre la prioridad de planificacion del hilo. Un atributo es inicializado con una llamada separada a `pthread_attr_init()`. Pero, en muchos casos, los que vienen por defecto estan bien; en algunos casos, tambien se le puede pasar `NULL`.
+* `start_routine` es el mas complejo, solamente pide que funcion deberia empezar a ejecutar el hilo. En C, esto se lo llama **Puntero a una Funcion**, y esto nos dice que se espera un nombre de una funcion, al cual se le pasa un solo argumento de tipo `void *`, y la cual retorna un valor de tipo `void *`.
+<br>En cambio, si una rutina necesita un argumento de tipo `int`, en vez de un puntero `void`, la declaracion se veria algo como:
+
+```c
+int pthread_create(..., // los dos primeros argumentos son los mismos
+                    void *(*start_routine)(int),
+                    int arg
+                  );
+```
+
+Y si en vez de eso la rutina toma un puntero a `void`, pero retorna un `int`, se veria:
+
+```c
+int pthread_create(..., // los dos primeros argumentos son los mismos
+                  int (*start_routine)(void *),
+                  void *arg);
+```
+
+* El ultimo argumento, `arg` es el argumento para ser pasado donde el hilo comienza la ejecucion.
+
+Ejemplo:
+
+```c
+#include <stdio.h>
+#include <pthread.h>
+
+typedef struct {
+  int a;
+  int b;
+} myarg_t;
+
+void *mythread(void *arg) {
+  myarg_t *args = (myarg_t *) arg;
+  printf("%d %d\n", args->a, args->b);
+  return NULL;
+}
+
+int main(int argc, char *argv[]) {
+  pthread_t p;
+  myarg_t args = { 10, 20 };
+
+  int rc = pthread_create(&p, NULL, mythread, &args);
+  ...
+}
+```
+
+En el ejemplo, solo creamos un hilo al que le pasan dos argumentos, empaquetados en un solo tipo definido por nosotros (`myarg_t`). El hilo, una vez creado, puede simplemente castear este argumento al tipo deseado y desempaquetar los argumentos como deseamos.
+
+### Finalizacion de los Hilos
+
+Para finalizar un hilo, debemos llamar a la rutina `pthread_join()`.
+
+```c
+int pthread_join(
+                  pthread_t thread, 
+                  void **value_ptr
+                );
+```
+
+Esta funcion toma dos argumentos:
+* `pthread_t` es usado para especificar por cual hilo esperar. Esta variable es inicializada en la creacion del hilo.
+* `void **value_ptr` es un puntero al valor de retorno que deseamos obtener. Dado que una puede retornar cualquier cosa, esta definida para retornar un puntero a `void`; dado que `pthread_join()` cambia el valor del argumento pasado, necesitamos pasar un puntero y no el valor.
+
+Ejemplo:
+
+```c
+typedef struct { int a; int b; } myarg_t;
+typedef struct { int x; int y; } myret_t;
+
+void *mythread(void *arg) {
+  myret_t *rvals = Malloc(sizeof(myret_t));
+  rvals->x = 1;
+  rvals->y = 2;
+  return (void *) rvals;
+}
+
+int main(int argc, char *argv[]) {
+  pthread_t p;
+  myret_t *rvals;
+  myarg_t args = { 10, 20 };
+  Pthread_create(&p, NULL, mythread, &args);
+  Pthread_join(p, (void **) &rvals);
+  printf("returned %d %d\n", rvals->x, rvals->y);
+  free(rvals);
+  return 0;
+}
+```
+
+Se ve en el codigo, se crea un solo hilo, y se le pasan un par de argumentos a traves de la estructura `myargt_t`. Para retornar los valores, se usa el tipo `myret_t`. Una vez que el hilo termina de ejecutarse, el hilo principal, el cual estaba esperando dentro de `pthread_join()`, retorna y puede acceder a los valores retornados del hilo.
+<br>Notar:
+1. Muchas veces no tenemos que hacer todo eso de empaquetar y desempaquetar los argumentos. Por ejemplo, si creamos un hilo sin argumentos, podemos pasarle `NULL` como argumento. De forma similar, podemos pasar `NULL` en `pthread_join()` si no queremos preocuparnos del valor de retorno.
+2. Si queremos pasar un solo valor, no necesitamos empaquetarlo:
+
+```c
+void *mythread(void *arg) {
+  long long int value = (long long int) arg;
+  printf("%lld\n", value);
+  return (void *) (value + 1);
+}
+
+int main(int argc, char *argv[]) {
+  pthread_t p;
+  long long int rvalue;
+  Pthread_create(&p, NULL, mythread, (void *) 100);
+  Pthread_join(p, (void **) &rvalue);
+  printf("returned %lld\n", rvalue);
+  return 0;
+}
+```
+
+3. Hay que tener cuidado en como son retornados los valores del hilo. Especificamente, nunca retornar un puntero al que se refiera a algo del *stack* del hilo. Por ejemplo, un codigo peligroso:
+
+```c
+void *mythread(void *arg) {
+  myarg_t *args = (myarg_t *) arg;
+  printf("%d %d\n", args->a, args->b);
+  myret_t oops; // ALLOCATED ON STACK: NOOOO!
+  oops.x = 1;
+  oops.y = 2;
+  return (void *) &oops;
+}
+```
+
+En este caso la variable `opps` esta en el *stack* de `mythread()`. Pero, cuando la retorna, el valor se desasigna, por lo que, devuelve un puntero a una variable sin asignar.
+<br>Finalmente usar `pthread_create()` para crear un hilo, y enseguida llamar a `pthread_join()`, es una forma rara de crear un hilo. La forma correcta es llamada **Llama de Procedimientos**
+
+### Candados
+
+
+### Resumen de Navier:
 
 Para crear y controlar *threads* se utilia la ***POSIX Library***:
 * `pthread_t`: Tipo que representa al *thread*.
