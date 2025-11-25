@@ -34,6 +34,7 @@ Dios los bendiga 🚬
 - [Capitulo 27: API de los Hilos](#capitulo-27-api-de-los-hilos)
 - [Capitulo 28: Locks](#capitulo-28-locks)
 - [Capitulo 30: Variable de Condicion](#capitulo-30-variables-de-condicion)
+- [Capitulo 31: Semaforos](#capitulo-31-semaforos)
 
 # Virtualizacion de la CPU
 
@@ -2065,3 +2066,354 @@ Un *Lock* de Dos Fases es un enfoque hibrido que combina la mejor de ambos mundo
 Este enfoque busca el equilibrio, optimizando para secciones criticas cortas sin penalizar excesivamente las largas.
 
 ## Capitulo 30: Variables de Condicion
+
+En la programacion concurrente, los *lock* son una herramienta fundamental, pero no son suficientes para resolver todos los problemas de sincronizacion. Con frecuencia, un hilo necesita detener su ejecucion y esperar a que una condicion especifica se cumpla antes de continuar. Por ejemplo, un hilo padre podria necesitar a que su hijo termine su tarea. El desafio central es implementar esta espera de una manera que no desperdicie recursos del sistema.
+
+### Evaluacion del Enfoque Ineficiente
+
+Un primer enfoque para que un hilo padre espere a un hijo podria ser el uso de una variable compartida. El hilo padre entraria en un bucle, verificando repetidamente el valor de esta variable hasta que el hijo la modifique para indicar que ha terminado.
+
+```c
+volatile int done = 0;
+
+void *child(void *arg) {
+  printf("child\n");
+  done = 1;
+  return NULL;
+}
+
+int main(int argc, char *argv[]) {
+  printf("parent: begin\n");
+  pthread_t c;
+  pthread_create(&c, NULL, child, NULL);  // Child
+  while (done == 0);  // Spin
+  printf("parent: end\n");
+  return 0;
+}
+```
+
+Aunque esta solucion, conocida como **Espera Activa** (***Spinning***), es duncional, es muy ineficiente. El hilo padre consume ciclos de CPU de forma continua simplemente para verificar una condicion, un desperdicio de recursos que podrian ser utilizado por otros hilos o procesos. Se necesita un mecanismo que permita al hilo "dormir" hasta que la condicion se cumpla.
+<br>Las **Variables de Condicion** surgen como la solucion elegante y eficiente para este problema, proporcionando una forma estructurada para que los hilos esperen condiciones sin malgastar la CPU.
+
+### Variables de Condidicion
+
+Una **Variable de Condicion** (**CV**) es, a nivel conceptual, una cola explicita en la que los hilos pueden suspender su ejecuion (ponerse a "dormir") cuando una condicion del programa no es la deseada. Mas tarde, otro hilo que modifique el estado del programa puede notificar a uno o mas de los hiloes en espera para que "despierten" y continuen su ejecucion. Esta idea se remonta a los "semaforos privados" de Dijkstra y fue formalizado como "variables de condicion" por Hoare.
+
+Las variables de condicion se manejan principalmente a traves de dos operaciones: `wait()` y `signal()`. En el estandar POSXI, estas operaciones corresponden a las siguientes funciones:
+* `pthread_cond_wait(pthread_cond_t *c, pthread_mutex_t *m);`
+* `pthread_cond_signal(pthread_cond_t *c);`
+
+La operacion `wait()` tiene una interaccion crucial y obligatoria con un `mutex`. su funcionamiento es el siguientes:
+1. El hilo que llama a `wait()` debe tener el `mutex` asociado bloqueado.
+2. Al ser llamada, `wait()` libera atomicamente el `mutex` y pone a dormir al hilo. Este paso es atomico para evitar condiciones de carrera, donde un hilo podria perder una señal entre la verificacion de la condicion y el momento de irse a dormir.
+3. Cuando el hilo es despertado por una señal, vuelve a adquirir el `mutex` antes de que la funcion `wait()` retorne.
+
+Este diseño garantiza que el estado compartido, protegido por el `mutex`, pueda ser modificado y verificado de manera segura.
+
+#### Ejemplo
+
+```c
+int done = 0;
+pthread_mutex_t m = PTHREAD_MUTEX_INITIALIZER;
+pthread_cond_t c = PTHREAD_COND_INITIALIZER;
+
+void thr_exit() {
+  pthread_mutex_lock(&m);
+  done = 1;
+  pthread_cond_signal(&c);
+  pthread_mutex_unlock(&m);
+}
+
+void *child(void *arg) {
+  printf("child\n");
+  thr_exit();
+  return NULL;
+}
+
+void thr_join() {
+  pthread_mutex_lock(&m);
+  while (done == 0)
+    pthread_cond_wait(&c, &m);
+  pthread_mutex_unlock(&m);
+}
+
+int main(int argc, char *argv[]) {
+  printf("parent: begin\n");
+  pthread_t p;
+  pthread_create(&p, NULL, child, NULL);
+  thr_join();
+  printf("parent: end\n");
+  return 0;
+}
+```
+
+En el codigo se utiliza una variable de condicion para resolver correctamente el problema del padre que espera al hijo.
+<br>Este codigo funciona correctamente en los dos escenarios posibles de ejecucion:
+1. **El padre se ejecuta primero**: Llama a `thr_join()`, adquiere el `mutex`, y comprueba que la variable `done` es 0. Llama a `pthread_cond_wait()`, lo que libera el `mutex` y lo pone a dormir. Cuando el hijo se ejecuta, establece `done` en 1 y llama a `pthread_cond_signal()` para despertar al padre. El padre, al despertar, vuelve a adquirir el `mutex`, verifica que `done` es 1, sale del bucle, libera el `mutex` y continua.
+2. **El hijo se ejecuta primero**: El hijo adquiere el `mutex`, establece `done` en 1, y emite la señal. Como el padre aun no esta esperando, la señal no tiene efecto. Cuando el padre finalmente se ejecuta y llama a `thr_join()`, adquiere el `mutex`, comprueba que `done` ya es 1, y por lo tanto, nunca necesita llamar a `wait()`.
+
+La variable de estado `done` es indispensable. Si se omite, se produce un error conocido como ***Lost Wakeup*** (**Despertar Perdido**), como se muestra en el siguiente codigo erroneo:
+
+```c
+void thr_exit() {
+  pthread_mutex_lock(&m);
+  pthread_cond_signal(&c);
+  pthread_mutex_unlock(&m);
+}
+
+void thr_join() {
+  pthread_mutex_lock(&m);
+  pthread_cond_wait(&c, &m);
+  pthread_mutex_unlock(&m);
+}
+```
+
+El fallo ocurre si el hijo se ejecuta primero y llama a `signal()` antes de que el padre llame a `wait()`. En este caso, la señal se pierde para siempre, y cuando el padre finalmente llame a `wait()`, se quedara bloqueado indefinidamente. La variable `done` previene esto al registrar el estado.
+
+Asimismo, el `mutex` tambien es indispensable. Sin el, se abre una sutil condicion de carrera. Consideremos la siguiente implementacion hipotetica sin bloqueo:
+
+```c
+void thr_exit() {
+  done = 1;
+  pthread_cond_signal(&c);
+}
+
+void thr_join() {
+  if (done == 0)
+    pthread_cond_wait(&c);
+}
+```
+
+El problema ocurre de la siguiente manera: El padre llama a `thr_join()` y verifica que `done` es 0. Justo en este momento, antes de que pueda llamar a `wait()`, es interrumpido por el planificador. El hilo se ejecuta por completo, cambia `done` a 1 y emite la señal. Como nadie esta esperando, la señal se pierde. Cuandoo el padre reanuda su ejecucion, llama a `wait()` y se duerme para siempre. El `mutex` previene esta carrera al asegurar que la verificacion  de `done` y la llamada a `wait()` sean atomicas y respecto a la modificacion de `done` y la llamada a `signal()`. 
+
+#### Principio Clave de Diseño
+
+Para garantizar la correctitud del codigo, se debe seguir una regla simple pero fundamental: Siempre mantener el `mutex` bloqueado al llamar tanto a `signal()` como a `wait()`. La llamada a `wait()` lo requiere por definicion, y aunque en algunas cosas `signal()` podria funcionar sin el *lock*, mantenerlo es la practica mas segura y robusta.
+
+### El Problema del Productor/Consumidor (Buffer Acotado)
+
+El problema del productor-consumidor, tambien conocido como el problema del buffer acotado, es un pilar en el estudio de la concurrencia. En este escenario, uno o mas hilos **Productores** general datos y los colocan en un buffer compartido, mientras que uno o mas hilos **Consumidores** extraen del buffer para procesarlos. Este patron es comun en sistemas reales, como en un servidor web multihilo donde los hilos productores aceptan peticiones HTTP y los hilos consumidores las procesan, o en las *pipes* de UNIX, que conectan la salida de un proceso con la entrada de otro.
+
+Un primer intento de solucion podria usar un unico `mutex` y una unica variable de condicion. Los productores esperarian si el buffer esta lleno, y los consumidores si esta vacio.
+
+```c
+int loops; // Must initialize somewhere...
+cond_t cond;
+mutex_t mutex;
+
+void *producer(void *arg) {
+  int i;
+  for (i = 0; i < loops; i++) {
+    pthread_mutex_lock(&mutex); //p1
+    if (count == 1) { // p2
+      pthread_cond_wait(&cond, &mutex); //p3
+    }
+    put(i); //p4
+    pthread_cond_signal(&cond); //p5
+    pthread_mutex_unlock(&mutex); //p6
+  }
+}
+
+void *consumer(void *arg) {
+  int i;
+  for (i = 0; i < loops; i++) {
+    pthread_mutex_lock(&mutex); //c1
+    if (count == 0) { // c2
+      pthread_cond_wait(&cond, &mutex); //c3
+    }
+    int tmp = get(); // c4
+    pthread_cond_signal(&cond); //c5
+    pthread_mutex_unlock(&mutex); //c6
+    printf("%d\n", tmp);
+  }
+}
+```
+
+Esta solucion falla en presencia de multiples consumidores. Consideremos un productor (Tp) y dos consumidores (Tc1, Tc2).
+1. Tc1 se ejecuta, ve el buffer vacio y llama a `wait()`, quedando dormido.
+2. Tp se ejecuta, produce un dato, y llama a `signal()`, lo que mueve a Tc1 de la cola de espera a la cola de listos (*ready queue*). Tc1 esta listo para ejecutarse, pero aun no se esta ejecutando.
+3. Antes de que Tc1 pueda ejecutarse, Tc2 "se cuela", adquiere el `mutex`, ve que el buffer esta lleno, consume el dato, y libera el `mutex`.
+4. Finalmente, Tc1 se ejecuta. Como ya paso la verificacion `if` antes de dormir, procede directamente a llamar a `get()`, intentando consumir un dato de un buffer que ahora esta vacio. Esto provoca un error.
+
+Este fallo se debe a la **Semantica Mesa**, que son las que implementan la mayoria de los sistemas. Bajo estas semanticas, una señal es solo una pista de que el estado ha cambiado, pero no una garantia. Cuando un hilo despierta, debe re-evaluar la condicion, ya que otro hilo podria haber notificado el estado mientras tanto. El enfoque alternativo, las **Semanticas Hoare**, garantiza que el hilo despertado se ejecute de inmediato, pero es mas complejo de implementar.
+
+#### Solucion Mejorada
+
+La solucion al problema es reemplazar la sentencia `if` por un bucle `while`.
+
+```c
+void *producer(void *arg) {
+  int i;
+  for (i = 0; i < loops; i++) {
+    pthread_mutex_lock(&mutex); //p1
+    while (count == 1) { // p2
+      pthread_cond_wait(&cond, &mutex); //p3
+    }
+    put(i); //p4
+    pthread_cond_signal(&cond); //p5
+    pthread_mutex_unlock(&mutex); //p6
+  }
+}
+
+void *consumer(void *arg) {
+  int i;
+  for (i = 0; i < loops; i++) {
+    pthread_mutex_lock(&mutex); //c1
+    while (count == 0) { // c2
+      pthread_cond_wait(&cond, &mutex); //c3
+    }
+    int tmp = get(); // c4
+    pthread_cond_signal(&cond); //c5
+    pthread_mutex_unlock(&mutex); //c6
+    printf("%d\n", tmp);
+  }
+}
+```
+
+con `while`, cuando Tc1 finalmente se ejecuta, vuelve a comprobar la condicion. Al ver que el buffer esta vacio (ya que Tc2 ya consumio el dato), volvera a llamar a `wait()` y se dormira correctamente. Sin embargo, esta solucion contiene fallos.
+<br>El problema ahora radica en el uso de una unica variable de condicion. Imaginemos dos consumidores (Tc1, Tc2) y un productor (Tp).
+1. Tc1 y Tc2 intenta consumir, ven el buffer vacio y se duermen en la misma Variable de Condicion.
+2. Tp produce un dato y señaliza, despertando a Tc1. Luego, Tp intenta producir otro dato, pero como el buffer esta lleno, llama a `wait()` y se duerme en la misma Variable de Condicion que Tc2.
+3. Tc1 despierta, consume el dato y, criticamente, llama a `signal()` para despertar a un hilo.
+4. El problema es: ¿A quien despierta? Deberia despertar al productor, ya que el buffer ahora esta vacio. Pero, como todos esperan en la misma Variable de Condicion, podria despertar al otro consumidor.
+5. Si Tc2 despierta, vera el buffer vacio y volvera a dormirse. Mientras tanto, Tp, el unico que podria hacer progresar el sistema, permanece dormido. Tc1 tambien se dormira en su siguiente iteracion. Todos los hilos terminan dormidos, un **Interbloqueo** (***Deadlock***).
+
+#### Solucion Correcta para un Buffer Unico
+
+La solucion es utilizar dos variables de condicion distintas para dirigir las señales de forma inequivoca:
+* `empty`; Los productores esperan en esta variable de condicion cuando el buffer esta lleno. Los consumidores señalizan en esta variable de condicion despues de consumir un dato.
+* `fill`: Los consumidores esperan en esta variable de condicion cuando el buffer esta vacio. Los productores señalizan en esta variable de condicion despues de producir un dato.
+
+```c
+cond_t empty, fill;
+mutex_t mutex;
+
+void *producer(void *arg) {
+  int i;
+  for (i = 0; i < loops; i++) {
+    pthread_mutex_lock(&mutex); 
+    while (count == 1) { 
+      pthread_cond_wait(&empty, &mutex); 
+    }
+    put(i); 
+    pthread_cond_signal(&fill); 
+    pthread_mutex_unlock(&mutex); 
+  }
+}
+
+void *consumer(void *arg) {
+  int i;
+  for (i = 0; i < loops; i++) {
+    pthread_mutex_lock(&mutex); 
+    while (count == 0) { 
+      pthread_cond_wait(&fill, &mutex); 
+    }
+    int tmp = get(); 
+    pthread_cond_signal(&empty); 
+    pthread_mutex_unlock(&mutex); 
+    printf("%d\n", tmp);
+  }
+}
+```
+
+Con este diseño, un consumidor solo puede despertar a un productor, y un productor solo puede despertar a un consumidor, eliminando la ambiguedad y el riesgo de interbloqueo.
+
+#### Generalizacion a la Solucion Final (Buffer Multiple)
+
+Para mejorar la eficiencia y la concurrencia, la solucion se generaliza para un buffer con multiples ranuras (`MAX > 1`). Esto permite que los productores añadan varios elementos antes de tener que dormir, y viceversa para los consumidores.
+
+```c
+int buffer[MAX];
+int fill_ptr = 0;
+int use_ptr = 0;
+int count = 0;
+
+void put(int value) {
+  buffer[fill_ptr] = value;
+  fill_ptr = (fill_ptr + 1) % MAX;
+  count++;
+}
+
+int get() {
+  int tmp = buffer[use_ptr];
+  use_ptr = (use_ptr + 1) % MAX;
+  count--;
+  return tmp;
+}
+```
+
+La logica de sincronizacion se adapta para reflejar el tamaño del buffer.
+
+```c
+// Logica del productor
+pthread_mutex_lock(&mutex); 
+while (count == MAX) { 
+  pthread_cond_wait(&empty, &mutex); 
+}
+put(i); 
+pthread_cond_signal(&fill); 
+pthread_mutex_unlock(&mutex); 
+
+// Logica del consumidor
+pthread_mutex_lock(&mutex); 
+while (count == 0) { 
+  pthread_cond_wait(&fill, &mutex); 
+}
+int tmp = get(); 
+pthread_cond_signal(&empty); 
+pthread_mutex_unlock(&mutex); 
+printf("%d\n", tmp);
+```
+
+#### Principios Clave del Diseño
+
+La regla de oro es: **Siempre usar un bucle `while` para verificar las condiciones, nunca un `if`**. Esto no solo maneja correctamente las semanticas Meca, sino que tambien protege contra "despertares espurios" (*spurious wakeups*), un fenomeno donde un hilo puede despertar de `wait()` sin haber sido señalizado explicitamente. El bucle `while` garantiza que la condicion se re-evalue siempre, lo que hace al codigo robusto.
+
+### Condiciones de Cobertura
+
+En algunos escenarios, un hilo que señaliza no tiene suficiente informacion para saber a que hilo especifico debe despertar. Este problema fue descrito por Lampson y Redell en el contexto de un asignador de memoria multihilo, como se ilustra en el siguiente codigo:
+
+```c
+// how many bytes of the heap are free?
+int bytesLeft = MAX_HEAP_SIZE;
+
+// need lock and condition too
+cond_t c;
+mutex_t m;
+
+void *allocate(int size) {
+  pthread_mutex_lock(&m);
+  while (bytesLeft< size) {
+    pthread_cond_wait(&c, &m);
+  }
+  void *ptr = ...; // get mem from heap
+  bytesLeft -= size;
+  pthread_mutex_unlock(&m);
+  return ptr;
+}
+
+void free(void *ptr, int size) {
+  pthread_mutex_lock(&m);
+  bytesLeft += size;
+  pthread_cond_signal(&c); // whom to signal???
+  pthread_mutex_unlock(&m);
+}
+```
+
+Consideremos un asignaodr de memoria con la siguiente situacion:
+1. El hilo Ta solicita 100 bytes de memoria. No hay suficiente, por lo que se duerme en una variable de condicion.
+2. El hilo Tb solicita 10 bytes. Tampoco hay suficientes, y tambien se duerme en la misma variable de condicion.
+3. El hilo Tc libera 50 bytes de memoria y llama a `signal()`. 
+
+El problema es que la señal podria despertar incorrectamente a Ta, que necesita 100 bytes y no puede continuar. El hilo que deberia ser despetado es Tb, que solo necesita 10 bytes y si podria proceder. El hilo Tc, al liberar memoria, no sabe que hilo estan esperando ni cuanta memoria necesita cada uno.
+
+#### Solucion `broadcast()`
+
+La solucion a este dilema es usar `pthread_cond_broadcast()`, en lugar de `pthread_cond_signal()`.
+* `pthread_cond_broadcast()`: Despierta a todos los hilos que estan esperando en la variable de condicion.
+
+Al despertar a todos, se garantiza que cualquier hilo que pueda continuar (como Tb en el ejemplo) lo hara. Los hilos que no puedan continuar (como Ta) simplemente re-evaluaran la condicion en su bucle y volveran a dormirse.
+<br>Este enfoque define una **Condicion de Cobertura** (***Covering Condition***): Una condicion que, de manera conservadora, cubre todos los casos en los que un hilo podria necesitar despetarse. La desventaja es un posible impacto en el rendimiento, ya que se pueden despertar muchos hilos innecesariamente.
+
+## Capitulo 31: Semaforos
+
