@@ -1734,62 +1734,334 @@ Un par de cosas a tener en cuenta sobre la secuencia del codigo. Primero, cuando
 <br>Segundo, la llamada `wait` toma un *lock* como argumento, cuando la llamada a `signal` solo toma una condicion. La razon de esta diferencia es que `wait`, ademas de poner el hilo a dormir, libera el *lock*. Pero, antes de retornar luego de ser despertado la llamada `pthread_cond_wait()` readquiere el *lock*. Por lo que, asegura que cada vez que el hilo que esta esperando se ejecuta entre la adquisicion del *lock* al principio de la secuencia `wait`, y la liberacion del *lock* al final, manteniendo el *lock*.
 <br>Por ultimo, el hilo que esta esperando verifica la condicion en un bucle, en vez de un `if`, usar `while` es lo mas facil y seguro de hacer.
 
-## Capitulo 28: Locks
+## Capitulo 28: *Locks*
 
-Un ***lock*** es una **Primitiva de Sincronizacion** abstracta que cuenta con solo una variable y, debido a la naturaleza secuencial del programa, permite proteger una zona del codigo. Se declara la variable *lock* de algun tipo y la misma tiene el estado del *lock* en cualquier momento dado.
-<br>Puede estar ***Available***/**Disponible** (o ***Unlocked***, ***Free***), o sea ningun hilo tiene el *lock* en su posesion, o estar ***Acquired***/**Adquirido** (o ***Locked***, ***Held***), lo que significa que un hilo (y solo uno) tiene el *lock*.
-<br>Se pueden guardar otros datos en el *lock*, como que hilo tiene el *lock* en su poder (si lo hay), o una lista de los hilos en espera de adquirir el *lock*. Esta informacion esta oculta al usuario.
+### Idea Basica
 
-La rutina `lock()` trata de adquirir el *lock* y, si ningun hilo lo tiene en su control (*is unlocked*), va a hacerlo y entrar a la zona critica. Este hilo es llamado **Dueño**/***Owner*** del *lock*. Si otro hilo llama a `lock()` con la misma variable *lock*, no va a volver y se va a quedar en un bucle intentado conseguirlo, previniendo asi que acceda a la zona critica.
+Un ***lock*** es una variable que protege una seccion critica y solo puede estar en uno de dos estados: **Disponible** (o **Libre**) si ningun hilo lo posee, o **Adquirido** (o **Ocupado**) si un hilo lo posee. Esta variable puede contener informacion adicional, como el identificador del hilo propietario o una cola de espera.
 
-Los *locks* no otorgan control sobre el *scheduler*. Los hios son entidades creadas por el programador y administradas por el SO; cn los *locks* el usuario se asegura que solo un hilo pueda acceder a una seccion de codigo al mismo tiempo.
+Consideremos el ejemplo de una seccion critica que actualiza una variable compartida: `balance = balance + 1`.
 
-### *Pthread Locks*
+Para proteger esta operacion y garantizar que se ejecute de forma atomica, la encapsulamos con un *lock*:
 
-La *POSIX library* llama ***mutex*** a los locks, y los usa para moveer exclusion mutua entre hilos.
+```c
+lock_t mutex; // Variable de bloqueo globalmente asignada
 
-Las rutinas pasan variables a `lock()` y a `unlock()` porque pueden usarse diferentes *locks* para proteger diferentes zonas criticas. Esto aumenta la **Concurrencia** ya que en vez de un solo bloque grande que se *lockea* cada vez que se accede a cualquier zona critica en su interior (una estrategia de *lock* de **Grano Grueso**/***Coarse-Grained*** *lockin*), se pueden proteger diferentes datos y estructuras de datos con diferentes *locks*, permitiendo que mas hilos accedan al codigo a la vez (***Fine-Grained*** *locking*/de **Grano Fino**). Estas hacen uso de instrucciones provistas por el hardware para evitar *race conditions* que permitan que dos hilos obtengan un mismo *lock*.
+...
 
-Un *lock* puede implementarse de distintas maneras, tanto con ayuda de hardware como solo mediante software, pero siempre deben cumplir con ser **Correctas** (proteger la region critica), **Justas** (evitar la *starvation* de hilos esperando entrar en una seccion) y tener un buen **Desempeño**. Algunas implementaciones:
-* #### Desactivar *Interrupts*
-Una solucion para asegurar la atomicidad en las secciones criticas es desactivar las interrupciones. Esto es efectivo pero solo funciona como solucion para sistemas mono core y ademas significa confiar en que los programas no abusen de esto, llamando a *lock* para monopolizar el CPU y haciendo que el SO pierda el control del sistema. Se usa solo de manera interna y en regiones pequeñas y puntuales del SO.
+lock(&mutex);
+balance = balance + 1;
+unlock(&mutex);
+```
 
-* #### Usar solo *Loads/Store*
-Se puede intentar construir un *lock* sin desactivar las interrupciones, usando una variable *flag* para indicar si algun hilo tiene un *lock* en su posesion, y en caso de que asi sea, hacer ***Spin Wait*** (un bucle chequeando la condicion del *lock*) hasta que el *lock* sea liberado.
-<br>Esto tiene problemas tanto de *correctness* (exactitud) ya que por concurrencia dos hilos podrian adquirir el *lock*, y de *Perfomance* (desempeño) debido al alto coste de hacer *Sping Waiting*.
+Aca `mutex` es la variable de bloqueo. `lock` y `unlock` son las rutinas que se encargan de adquirir y liberar el *lock* respectivamente:
+* `lock()`: Un hilo llama a esta funcion para intentar adquirir el *lock*. Si esta disponible, el hilo lo adquiere, se convierte en su "propietario" y entra en la seccion critica. Si otro hilo ya posee el *lock*, el nuevo hilo que intenta adquirirlo se detendra y esperara hasta que sea liberado.
+* `unlock()`: Cuando un hilo propietario del *lock* termina de ejecutar la seccion critica, llama a esta funcion para liberarlo, dejandolo disponible de nuevo. Si hay otros hilos esperando, uno de ellos podra entonces adquirir el *lock* y entrar a la seccion critica.
 
-Estos dos intentos fallidos muestran que es necesario el **Soporte del Hardware** para construir soluciones que garanticen la exclusion mutua.
+### `Pthread Locks`
 
-* #### *Spin Locks* con ***Test-And-Set***
-el hardware provee soporte para instrucciones ***Test-And-Set*** (***Atomic Exchange***)  atomicas.
-<br>*Test and Set* devuelve el valor viejo apuntando por `old_per`, y actuliza el valor con `new`. Con esta instruccion se puede construir un ***Spin Lock*** (usando *test-and-set* para chequear la condicion del *lock*, y solo saliendo del *spin-wait* si el valor viejo es 0).
-<br>El que se use *spin lock* para esperar a que el ***Owner*** libera el *lock* hace que sea necesario un ***Preemptive Scheduler***. Sim embargo, (y por mas que se garantice *correctness* y perfomance para sistemas multi core) se pueden generar problemas de ***Fairness*** con hilos en espera que pueden queda en *spin* indefinidamente.
+En la biblioteca de hilos POSIX, los *locks* son conocidos como `mutex`, un termino que destaca su proposito: Proporcionar **Exlusion Mutua**.
+<br>Ejemplo de uso en `Pthreads`:
 
-* #### *Compare-And-Swap*
-Otra primitiva soportada por hardware es ***Compare-And-Swap*** (**CaS**), o ***compare-and-exchange***. Esta se basa en comparar el valor de la direccion especificada por `ptr` con el esperado y, si lo es, actualizar la memoria señalada por `ptr` con el nuevo valor. Luego, devuelve el valor original, permitiendo a quien llamo a *compare-and-swap* saber si se actualizo o no algun valor.
-<br>Se puede generar un *lock* similar al de *test-and-set* usando *compare-and-swap* en el chequeo de condicion del loop. *Compare and Swap* es una instruccion mas poderosa que *test and set*, especialmente para algoritmos concurrentes que no usan *locks* (***Lock-Free Synchronization***).
+```c
+pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
 
-* #### *Load-Linked* y *Store-Conditional*
-Alguna plataformas **Desacoplan** las intrucciones anteriores (complejas) en dos mas sencillas que ayudan en la construccion de estructuras de concurrencia (como *locks*) para secciones criticas, ***Load-Linked*** (**ll**) y ***Store-Conditional*** (**SC**).
-<br>***Load-Linked*** toma un valor de memoria y lo coloca en un registro. ***Store-Conditional*** almacena en memoria el contenido de un registro, pero solo tiene exito si no hubo **Intervencion** de almacenamiento en esa direccion (un *Store*) luego de haber usado *Load-Link*. Si lo logra, devuelve 1, y si no 0, no actualiza el valor y devuelve 0 (detecta *race condition*).
-<br>Con `lock()`, un hilo puede hacer *spin wait* esperando que `flag=0` (que el *lock* esta libre) y cuando esto pasa intenta adquirir el *lock* a traves de ***Store-Conditional***. Si lo logra, el hilo cambia atomicamente el valor de la *flag* a 1 y entra en la seccion critica. Puede que mas de un hilo realice un *load-linked* y luego intente un *store-conditional*, debido a un *interrupt* y *context switch*, pero solo un *store conditional* lograra adquirir el lock, preservando la zona critica.
+pthread_mutex_lock(&lock);
+balance = balance + 1;
+pthread_mutex_unlock(&lock);
+```
 
-* #### *Fetch-And-Add*
-Otra instruccion provista por el hardware es ***Feach-And-Add***, la cual atomicamente incrementa un valor mientras devuelve el valor viejo a una direccion particular.
-<br>Con ella se puede construir un ***Ticket Lock*** que usa una variable ***Ticke*** y turno combinados para construir el *lock*. Cuando un hilo quiere el *lock* hace un *fetch-and-add* atomico en el valor del ticket y ese valor se considera el turno (`myturn`) de dicho hilo. La variable global `lock` -> `turn` es usada para determinar el turno de que hilo es, y cuando `myturn == turn` el hilo entra a la seccion critica. El *unlock* aumenta el valor del turno, y asi el siguiente hilo en espera (si lo hay) puede entrar a la seccion critica. Este metodo asegura que todos los hilos progresen.
+Es importante notar que se puede utilizar **Diferentes Bloqueos para Proteger Diferentes Variables** y estructuras de datos. Esta estrategia es conocida como **Bloqueo de Grano Fino** (***Fine-Grained***), permite que varios hilos operen en diferentes secciones criticas simultaneamente, siempre que no compitan por el mismo recurso. Esto aumente significativamente la concurrencia en comparacion con el enfoque de **Grano Grueso** (***Coarse-Grained***), donde un unico bloqueo protege todo el sistema, forzando a los hilos a esperar incluso cuando no hay un conflicto real de acceso.
 
-### Demasiado *Spinning*
-Estos metodos son simples y funcionan, pero pueden ser ineficientes si la cantidad de hilos esperando por un *lock* es grande, desperdiciando tiempo de procesador en mucho *spinnig*.
+### Construccion y Evaluacion de *Locks*
 
-#### Enfoque Simple: *Just Yield* ("Ceda el Paso")
-Consiste en que el hilo haciendo *spin* ceda el CPU, con la esperanza de que se ejecute el hilo que libere el *lock* (o la condicion) que espera. Asumimos que tenemos `yield()` provisto por el SO. 
-<br>Este enfoque puede ser malo en *Perfomance*, ya que el costo del *context switch* para correr el siguiente hilo es alto (aunque menor que hacer *spinnig*) y no soluciona el problema de *starvation*.
+¿Como se puede construir un *lock* que sea a la vez correcto y eficiente? La construccion de una primitiva de sincronizacion robusta no es trivial; requiere una cooperacion entre el hardware, que debe proporcionar instrucciones especiales (que no pueden ser interrumpidas), y el SO, que debe ofrecer soporte para la gestion eficiente de los hilos.
+<br>Una **Primitiva de Sincronizacion** es un mecanismo de bajo nivel más básico utilizados para coordinar la ejecución de hilos.
 
-#### Enfoque con Colas: *Sleeping* en Vez de *Spinnig*
-Se puede ejercer control explicito sobre que gilo es el siguiente para adquirir el *lock* despues de que el actual lo libere, usando una cola con el **Orden** de los hilos que esperan el *lock* en modo *sleep*.
-<br>Debe ser hecho con cuidado, ya que un mal *timing* de *context switch* puede causar un ***Wakeup***/***Waiting Race*** y que un hilo termine durmiendo para siempre.
+Para evaluar si una implementacion de *lock* es efectiva, se debe consisderar tres criterios fundamentales:
+1. **Exclusion Mutua**: Un hilo adquiere el *lock* y, mientras lo posee, ningun otro hilo puede adquirirlo.
+2. **Equidad** (***Fairness***): Cada hilo que compite por el *lock* tiene la misma oportunidad de adquirirlo. En un sistema injusto podria permitir que un hilo sufra de *starvation* (inanicion).
+3. **Rendimiento** (***Perfomance***): Este criterio se analiza en diferentes escenarios:
+  * **Sin Contencion**: La sobrecarga cuando un solo hilo adquiere y libera el *lock*.
+  * **Con Contencion en una Sola CPU**: El rendimiento cuando multiples hilos compiten por el *lock* en un unico procesador.
+  * **Con Contencion en Multiples CPUs**: El rendimiento cuando los hilos competidores se ejecutan en diferentes procesadores.
 
-#### Enfoque Hibrido: *Two-Phase Locks*
-En la primera fase el `lock()` hace ***Spin*** por un pequeño periodo de tiempo con la esperanza de obtener el *lock* (por si justo estaba por ser liberado, si la seccion critica era pequeña). Si no lo consigue rapido, entra en segunda fase y el hilo es puesto a **Dormir** hasta que se libere el *lock*.
+### Primer Intento de Implementacion de *Locks*
+
+El primer enfoque, que es el mas simple, se baso en el control de las interrupciones del procesador. Pero, este metodo presenta serias limitaciones. Luego en los enfoques posteriores utilizando unicamente operaciones de carga y almacenamiento de memoria estandar demostraron ser incorrectos, sentando las bases para la necesidad de un soporte de hardware mas sostificado para garantizar la atomicidad.
+
+La primera solucion para garantizar exclusion mutua en sistemas mono-core (monoprocesador) fue **Deshabilitar las Interrupciones**. El codigo era muy simple:
+
+```c
+void lock() {
+    DisableInterrupts();
+}
+
+void unlock() {
+    EnableInterrupts();
+}
+```
+
+Al deshabilitar las interrupciones antes de entrar en una seccion critica, un hilo se aseguraba de que no seria interrumpido, ejecutando su codigo de forma atomica. Pero, este enfoque presenta desventajas:
+* **Privilegio y Confianza**: Requiere otorgar a los programas la capacidad de ejecutar una operacion privilegiada. Un programa malicioso o con errores podria monopolizar la CPU o colgar el sistema por completo al no volver a habilitar las interrupciones.
+* **Incompatibilidad con Multiprocesadores**: Este metodo es ineficaz en sistemas multi-core (multiprocesadores) ya que  deshabilitar las interrupciones en un procesdor no impide que otro hilo se ejecute en un procesador diferente y acceda a la misma seccion critica.
+* **Perdida de Interrupciones**: Deshabilitar durante un periodo prolongado puede hacer que el sistema pierda eventos importantes, como la notificacion de que una operacion de I/O en disco ha finalizado.
+
+A pesar de estas limitaciones, este metodo todavia se utiliza en contextos muy especificos, como dentro del propio nucleo del SO. Alli, el problema de la "confianza" desaparece, ya que el SO se confia a si mismo para ejecutar estas operaciones privilegiadas de forma correcta y por periodos muy breves.
+
+#### Intento Fallido: Usando Solo *Loads*/*Stores*
+
+Tras descarte el control de interrupciones, el siguiente paso fue intentar construir un *lock* utilizando una unica variable `flag` y operaciones de *load* y *store* estandar. La idea era que un hilo esperara en un bucle mientras el `flag` estuviera en `1` (ocupado) y luego lo estableciera en `1` para tomar el bloqueo.
+
+```c
+void lock(lock_t *mutex) {
+  while (mutex->flag == 1) {  // Probar el flag
+    ; // Espera activa
+  }
+  mutex->flag = 1; // Tomar el bloqueo
+}
+```
+
+Este enfoque fracasa por dos razones:
+1. **Problemas de Correccion**: No garantiza la exclusion mutua. Para entender el error, imaginemos un planificador malicioso:
+
+![](../Teorico-practico/imagenes/EjemploFalla.jpg)
+
+El hilo 1 lee el `flag` y ve que es `0`. Justo antes de que pueda escribir `1`, ocurre una interrupcion. El planificador ejecuta al hilo 2, que tambien lee el `flag` (que sigue siendo `0`), escribe `1` en el y entra en la seccion critica. Cuando el hilo 1 se reanuda,  no vuelve a comprobar el `flag`; simplemente ejecuta la siguiente instruccion, que es escribir `1`, y tambien entra en la seccion critica. Ambos hilos estan ahora en seccion critica, violando la exclusion mutua.
+2. **Problemas de Rendimiento**: La tecnica de esperar un bucle, conocida como **Espera Activa** (***spin-waiting***), es extremadamente ineficiente. Un hilo que espera consume ciclos de CPU de forma continua sin realizar ningun trabajo util. En un sistema monoprocesador, esto es particularmente grave, ya que el hilo que posee el *lock* no puede ejecutarse para liberarlo mientras otros hilos esta girando.
+
+### *Locks* Basados en Hardware (*Spin Locks*)
+
+El fracaso de los enfoques basados solamente en software llevo a los diseñadores de sistemas a incorporar soporte de hardware especificos para la sincronizacion. Se crearon instrucciones atomicas que realizan multiples operaciones (como leer y modificar una ubicacion de memoria) como una unidad invisible. Estas instrucciones permitieron construir *locks* correctos, aunque inicialmente introdujeron el problema de la espera activa, dando a lugar a los llamados ***Spin Locks***.
+
+#### Construyendo *Spin Locks* Funcionales con *Test-And-Set*
+
+Una de las primeras y mas simples instrucciones para sincronizacion es ***Test-And-Set***. Estas instruccion atomica lee el valor antiguo de una direccion de memoria, escribe un nuevo valor en esa misma direccion y devuelve el valor antiguo. Todo esto ocurre como una unica operacion invisible. Aunque su nombre varia entre arquitecturas (por ejemplo, `ldstub` o `xchg`), su funcionalidad es la misma.
+
+```c
+int TestAndSet(int *old_ptr, int new) {
+  int old = *old_ptr;
+  *old_ptr = new;
+  return old;
+}
+```
+
+Usando `TestAndSet`, podemos construir un *Spin Lock* funcional
+
+```c
+typedef struct __lock_t {
+  int flag;
+} lock_t;
+
+void init(lock_t *lock) {
+  // 0: lock is avaible, 1: lock is held
+  lock->flag = 0;
+}
+
+void lock(lock_t *lock) {
+  while (TestAndSet (&lock->flag, 1) == 1); // spin-wait (do nothing)
+}
+
+void unlock(lock_t *lock) {
+  lock-flag = 0;
+}
+```
+
+Este diseño resuelve el problema de la exclusion mutua. Cuando un hilo llama a `lock()`, `TestAndSet` devuelve el valor antiguo del `flag` (`0` si esta libre) y simultaneamente lo establece en `1`. Solo el primer hilo que ejecute la instruccion cuando el `flag` es `0` recibira un `0` como retorno y adquirira el *lock*. Cualquier otro hilo recibira un `1` y permanecera girando en el bucle.
+
+Evaluemos el *spin lock* en `TestAndSet` segun nuestros criterios:
+* **Exclusion Mutua**: Es correcta. La atomicidad de *TestAndSet* garantiza que solo un hilo puede adquirir el *lock* a la vez.
+* **Equidad**: Es deficiente. No ofrece ninguna garantia de que un hilo en espera eventualemente adquiera el *lock*. Es posible que un hilo sufra de inanicion y gire indefinidamente mientras otros hilos adquieren y liberan el *lock* repetidamente.
+* **Rendimiento**:
+  * **En Sistemas de una Sola CPU**: Es problematica. Si un hilo que posee el *lock* es interrumpido, otros hilos podrian pasar quatum de tiempo completos girando inutilmente, ya que el propietario del *lock* no puede ejecutarse para liberarlo.
+  * **En sistemas multi-CPU**: Es razonable si las secciones criticas son cortas. Un hilo en una CPU puede girar mientras espera que otro hilo en una CPU diferente libere el *lock*, lo que puede suceder rapidamente.
+
+#### *Compare-And-Swap*
+
+Una instruccion atomica mas potente es ***Compare-And-Swap***:
+
+```c
+int CompareAndSwap(int *ptr, int expected, int new) {
+  int original = *ptr;
+  if (original == expected) {
+    *ptr = new;
+  }
+  return original;
+}
+```
+
+Esta instruccion compara el contenido de una direccion de memoria con un valor esperado y, solo si coinciden, actualiza esa direccion con un nuevo valor. En cualquier caso, devuelve el valor original de la memoria.
+
+```c
+void lock(lock_t *lock) {
+  while(CompareAndSwap(&lock->flag, 0, 1) == 1);  // Spin
+}
+```
+
+Implementar un *spin lock* con `CompareAndSwap` es funcionalemnte similar a hacerlo con `TestAndSet`: Un hilo intenta cambiar atomicamente el `flag` de `0` a `1` y gira si no lo consigue.
+
+#### *Load-Linked* y *Store-Conditional*
+
+Aglunas arquitecturas ofrecen un par de instrucciones que trabajan juntas: `LoadLinked` (LL) y `StoreConditional` (SC).
+* `LoadLinked` simplemente carga un valor desde la memoria.
+* `StoreConditional` intenta escribir un nuevo valor en la misma direccion, pero solo tiene exito si no ha habido ninguna otra escritura en esa direccion desde la ejecucion del `LoadLinked` por parte del mismo hilo.
+
+```c
+int LoadLinked(int *ptr) {
+  return *ptr;
+}
+
+int StoreConditional(int *ptr, int value) {
+  if (No hay actualización para *ptr desde LL a esta dirección) {
+    *ptr = value;
+    return 1; // Success!
+  } else {
+    return 0; // Failed to update
+  }
+}
+```
+
+Juntas, se pueden usar para construir un *lock*:
+
+```c
+void lock(lock_t *lock) {
+  while(1) {
+    while (LoadLinked(&lock->flag) == 1); // Spin until it's zero
+    if (StoreConditional(&lock->flag, 1) == 1) {
+      return; // if set-to-1 was success: done
+              // otherwise: try again
+    }
+  }
+}
+
+void unlock(lock_t *lock) {
+  lock->flag = 0;
+}
+```
+
+La forma en que evitan una condicion de carrera es precisa: Si el hilo 1 ejecuta `LoadLinked` y es interrumpido, el hilo 2 puede ejecutarse, ejecutar su propio `LoadLinked`, su `StoreConditional` (que tiene exito) y adquirir el *lock*. Cuando el hilo 1 se reanuda e intenta su `StoreConditional`, este fallara porque la memoria fue modificada por el hilo 2, forzandolo a reintentar todo el bucle y garantizando asi la exclusion mutua.
+
+#### *Fetch-And-Add*
+
+La instruccion atomica `FetchAndAdd` incrementa un valor en memoria y devuelve su valor de forma indivisible. Esta instruccion permite construir un ***Ticket Lock***, una implementacion mas sostificada que garantiza la equidad.
+
+```c
+int FetchAndAdd(int *ptr) {
+  int old = *ptr;
+  *ptr = old + 1;
+  return old;
+}
+```
+
+La logica se basa en dos variables: `Ticket` y `turn`.
+
+```c
+void lock(lock_t *lock) {
+  int myturn = FetchAndAdd(&lock->ticket);  // Obtiene un numero de ticket
+  while (lock->turn != myturn); // Espera hasta que sea su turno
+}
+
+void unlock(lock_t *lock) {
+  lock->turn = lock->turn + 1;  // Cede el turno al siguiente
+}
+```
+
+Cuando un hilo desea adquirir el *lock*, obtiene un numero de ticket unico (`myturn`). Luego espera activamente hasta que el contador global `turn` coincida con su numero. A diferencia de los *spin locks* simples, el *ticket lock* garantiza la equidad, eliminando el riesgo de inanicion que vimos antes. Los hilos son atendidos en el orden en que solicitaron el *lock*.
+
+### Superando el *Spinning*: Soporte del SO
+
+Todos los *locks* basados en hardware que vimos hasta ahora comparten un defecto: La **Espera Activa** o ***Spinning***, que desperdicia valioso ciclos de CPU. Esto es especialmente problematico en sistemas con una sola CPU. Para evitar el *Spinning* se requiere ir mas alla del hardware y utilizar el soporte del SO para gestionar de manera inteligente los hilos en espera, poniendolos a "dormir" en lugar de dejarlos girando.
+
+#### Enfoque Simple: Ceder (*Yield*)
+
+En un primer intento para evitar el *spinning* continuo es hacer que el hilo ceda voluntariamente la CPU en lugar de girar. Esto se logra reemplazando el bucle de espera por una llamada al sistema como `yield()`.
+
+```c
+void init() {
+  flag = 0;
+}
+
+void lock() {
+  while (TestAndset(&flag, 1) == 1) {
+    yield();  // Give up the CPU
+  }
+}
+
+void unlock() {
+  flag = 0;
+}
+```
+
+`yield()` mueve al hilo del estado de *Running* al de *Ready*, permitiendo que el planificador ejecute otro hilo.
+
+* **Ventajas**: En un escenario simple con dos hilos en una CPU, este enfoque funciona bien. El hilo en espera cede la CPU, permitiendo que el hilo que posee el bloqueo se ejecute y lo libere.
+* **Desventajas**: Con muchos hilos compitiendo, si el propietario del *lock* es interrumpido, los demas entraran en un ciclo de `lock() - yield()`, generando una gran cantidad de *context switch* costosos. Mas importante aun, este enfoque no resuelve el problema de la inanicion, ya que no hay garantia sobre que hilo se ejecutara a continuacion.
+
+#### Usando Colas: Durmiendo en Lugar de Girar
+
+La solucion mas robusta para evitar *spinning* es poner a los hilos en espero a dormir y despertarlos solo cuando el bloqueo este disponible. Esto requiere soporte explicito del SO, como las primitivas de solaris:
+* `park()`: Pone a dormir al hilo que la invoca.
+* `unparck(threadID)`: Despierta a un hilo especifico.
+
+Una implementacion combina estas primitivas con otras ideas que ya hemos visto:
+
+```c
+typedef struct __lock_t {
+  int flag;
+  int guard;
+  queue_t *q;
+} lock_t;
+
+void lock_init(lock_t *m) {
+  m->flag = 0;
+  m->guard = 0;
+  queue_init(m->q);
+}
+
+void lock(lock_t *m) {
+  while (TestAndSet(&m->guard, 1) == 1); //acquire guard lock by spinning
+  if (m->flag == 0) {
+    m->flag = 1; // lock is acquired
+    m->guard = 0;
+  } else {
+    queue_add(m->q, gettid());
+    m->guard = 0;
+    park();
+  }
+}
+
+void unlock(lock_t *m) {
+  while (TestAndSet(&m->guard, 1) == 1); //acquire guard lock by spinning
+  if (queue_empty(m->q)) {
+    m->flag = 0; // let go of lock; no one wants it
+  } else {
+    unpark(queue_remove(m->q)); // hold lock
+                                // (for next thread!)
+  }
+  m->guard = 0;
+}
+```
+
+* `guard`: Un *spin lock* que protege el acceso a la cola de espera (`q`) y a la variable `flag`. Esto convierte al bloqueo en una solucion hibrida: El *spinning* no se elimina, pero se confina a una seccion critica breve y controlada dentro del propio codigo del *lock*.
+* `queue_t`: Una cola donde se añaden los identificadores de los hilos que estan esperando el *lock*.
+* `flag`: Indica el estao del *lock* principal (0 si esta libre y 1 si esta ocupado).
+
+Un detalle crucial es como se transfiere el bloqueo. Cuando un hilo en `unlock()` despierta al siguiente, le pasa directamente la propiedad del *lock* (el `flag` permanece en 1). Esto es necesario porque el hilo recien despertado no posee el `guard` y, por lo tanto, no puede establecer el `flag` de forma segura. La propiedad se transfiere para garantizar la correcion.
+
+Esta implementacion sufre un problema sutil conocido como la **Carrera de Despertar/Espera** (***Wakeup/Waiting Race***): Un hilo podria decidir que va a dormir, ser interrumpido, y que otro hilo lo despierte (`unpark`) antes de que logre dormirse (`park`), causando que duerma indefinidamente. Solaris soluciona esto con una llamada opcional, `setpark()`, que permite al hilo declarar su intencion de dormir, evitando la condicion de carrera.
+
+#### Diferente SO, Diferente Soporte
+
+Otros SO ofrecen un soporte similar con diferentes interfaces. Linux, por ejemplo, proporciona el `futex` (***Fast Userpace Mutex***), que asocia una cola en el kernel a una direccion de memoria especifica.
+* `futex_wait(address, expected)`: Pone a dormir a un hilo si el valor en `address` coincide con `expected`.
+* `futex_wake(address)`: Despierta a un hilo que esta esperando en la cola asociada a `address`.
+
+#### *Locks* de Dos Fases (*Two-Phases Locks*)
+
+Un *Lock* de Dos Fases es un enfoque hibrido que combina la mejor de ambos mundos, reconociendo que girar puede ser eficiente si el *lock* se libera rapidamente.
+1. **Fase 1** (***Spinning***): Al intentar adquirir un *lock* ocupado, el hilo espera activamente (gira) durante un breve periodo de tiempo.
+2. **Fase 2** (***Sleeping***): si el *lock* no se libera durante la primera fase, el hilo deja de girar y se pone a dormir, evitanto asi un mayor despedicio de CPU.
+
+Este enfoque busca el equilibrio, optimizando para secciones criticas cortas sin penalizar excesivamente las largas.
 
 ## Capitulo 30: Variables de Condicion
