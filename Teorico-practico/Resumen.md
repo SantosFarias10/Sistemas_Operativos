@@ -35,6 +35,7 @@ Dios los bendiga 🚬
 - [Capitulo 28: Locks](#capitulo-28-locks)
 - [Capitulo 30: Variable de Condicion](#capitulo-30-variables-de-condicion)
 - [Capitulo 31: Semaforos](#capitulo-31-semaforos)
+- [Capitulo 32: Problemas Comunes de Concurrencia](#capitulo-32-problemas-comunes-de-concurrencia)
 
 # Virtualizacion de la CPU
 
@@ -2282,10 +2283,10 @@ con `while`, cuando Tc1 finalmente se ejecuta, vuelve a comprobar la condicion. 
 
 La solucion es utilizar dos variables de condicion distintas para dirigir las señales de forma inequivoca:
 * `empty`; Los productores esperan en esta variable de condicion cuando el buffer esta lleno. Los consumidores señalizan en esta variable de condicion despues de consumir un dato.
-* `fill`: Los consumidores esperan en esta variable de condicion cuando el buffer esta vacio. Los productores señalizan en esta variable de condicion despues de producir un dato.
+* `full`: Los consumidores esperan en esta variable de condicion cuando el buffer esta vacio. Los productores señalizan en esta variable de condicion despues de producir un dato.
 
 ```c
-cond_t empty, fill;
+cond_t empty, full;
 mutex_t mutex;
 
 void *producer(void *arg) {
@@ -2296,7 +2297,7 @@ void *producer(void *arg) {
       pthread_cond_wait(&empty, &mutex); 
     }
     put(i); 
-    pthread_cond_signal(&fill); 
+    pthread_cond_signal(&full); 
     pthread_mutex_unlock(&mutex); 
   }
 }
@@ -2306,7 +2307,7 @@ void *consumer(void *arg) {
   for (i = 0; i < loops; i++) {
     pthread_mutex_lock(&mutex); 
     while (count == 0) { 
-      pthread_cond_wait(&fill, &mutex); 
+      pthread_cond_wait(&full, &mutex); 
     }
     int tmp = get(); 
     pthread_cond_signal(&empty); 
@@ -2324,13 +2325,13 @@ Para mejorar la eficiencia y la concurrencia, la solucion se generaliza para un 
 
 ```c
 int buffer[MAX];
-int fill_ptr = 0;
+int full_ptr = 0;
 int use_ptr = 0;
 int count = 0;
 
 void put(int value) {
-  buffer[fill_ptr] = value;
-  fill_ptr = (fill_ptr + 1) % MAX;
+  buffer[full_ptr] = value;
+  full_ptr = (full_ptr + 1) % MAX;
   count++;
 }
 
@@ -2351,13 +2352,13 @@ while (count == MAX) {
   pthread_cond_wait(&empty, &mutex); 
 }
 put(i); 
-pthread_cond_signal(&fill); 
+pthread_cond_signal(&full); 
 pthread_mutex_unlock(&mutex); 
 
 // Logica del consumidor
 pthread_mutex_lock(&mutex); 
 while (count == 0) { 
-  pthread_cond_wait(&fill, &mutex); 
+  pthread_cond_wait(&full, &mutex); 
 }
 int tmp = get(); 
 pthread_cond_signal(&empty); 
@@ -2417,3 +2418,283 @@ Al despertar a todos, se garantiza que cualquier hilo que pueda continuar (como 
 
 ## Capitulo 31: Semaforos
 
+Los **Semaforos** son una de las primitivas de sincronizacion mas fundamentales y versatiles en la historia de la programacion concurrente. Fueron inventados por Dijkstra como una herramienta unificada y potente para resolver una amplia gama de problemas de concurrencia. La genialidad de su diseño radica en que un unico mecanismo puede ser utilizado tanto para implementar *locks* como para gestionar la señalizacion entre hilos, un rol que en otros modelos desempeñan las variables de condicion.
+<br>Historicamente, las dos operaciones principales sobre semaforos, hoy conocidas como `sem_wait()` y `sem_post()`, fueron denominadas por Dijkstra como `P()` y `V()`.
+
+Formalmente, un **Semaforo** es un objeto que contiene un valor entero y que es manipulado a traves de dos operaciones atomicas: `sem_wait()` y `sem_post()`. El comportamiento del semaforo esta determinado por el valor inicial que se le asigna.
+<br>La inicializacion se realiza mediante la funcion `sem_init()`, como se muestra a continuacion:
+
+```c
+sem_t s;
+sem_init(&s, 0, 1);
+```
+
+En el codigo, se declara un semaforo `s` y se inicializa con un valor de 1. El proposito de los argumentos es:
+1. `&s`: Es un puntero al semaforo que se va a inicializa.
+2. `0`: Un indicador de que el semaforo sera compartido entre hilos del mismo proceso.
+3. `1`: El valor inicial del semaforo.
+
+Una vez inicializado, el comportamiento de las operaciones `sem_wait()` y `sem_post()` se describe en el siguiente pseudocodigo:
+
+```c
+int sem_wait(sem_t *s) {
+  // Decrementa el valor del semaforo s en uno.
+  // Espera si el valor del semaforo s es negativo.
+}
+
+int sem_post(sem_t *s) {
+  // incrementa el valor del semaforo s en uno.
+  // Si hay uno o mas hilos esperando, despierta a uno.
+}
+```
+
+* `sem_wait(sem_t *s)`: Esta operacion decrementa el valor del semaforo en uno. A continuacion, comprueba el valor resultante: Si es negativo, el hilo se bloquea; en caso contrario, continua su ejecucion.
+* `sem_post(sem_t *s)`: Esta operacion incrementa el valor del semaforo. Si despues del incremento hay hilos bloqueados esperando en este semaforo, el sistema despierta a uno de ellos para que pueda continuar su ejecucion.
+
+Una variante clave en la definicion clasica de Dijkstra es que, cuando el valor del semaforo es negativo, su valor absoluto es igual al numero de hilos que estan actualmente en espera.
+
+### Semaforos Binarios
+
+Una de las aplicaciones mas directas de los semaforos es la proteccion de secciones criticas, una tarea para la cual habitualmente usamos *locks*. Un semaforo utilizado para este fin se conoce como **Semaforo Binarios**, ya que su estado puede interpretarse como "adquirido" o "no adquirido".
+<br>Para usar este semaforo como *lock*, la seccion critica debe estar encapsulada entre una llamada a `sem_wait()` y `sem_post()`.
+
+```c
+sem_t m;
+sem_init(&m, 0, X); // ¿Cual debe ser el valor de X? 1
+
+sem_wait(&m);
+// Seccion Critica
+sem_post(&m);
+```
+Para esta construccion funcione correctamente como *lock*, el valor inicial del semaforo (X) debe ser 1. Esto permite que el primer hilo que llegue pueda "adquirir" el *lock*, mientras que los siguientes deberan esperar.
+<br>Consideremos un escenario con un solo hilo:
+1. El hilo llama a `sem_wait(&m)`. El valor del semaforo se decrementa en 1 a 0.
+2. Como el valor es 0 (no negativo), el hilo no se bloquea y entra en la seccion critica.
+3. Al salir, el hilo llama a `sem_post(&m)`. restaurando el valor del semaforo a 1.
+
+### Semaforos para Ordenamiento
+
+Mas alla de la exclusion mutua, la sincronizacion es crucial para imponer un orden especifico en la ejecucion de eventos entre diferentes hilos. Un semaforo es una herramienta ideal para este proposito.
+<br>Consideremos un problema simple: Un hilo padre crea un hilo hijo y necesita esperar a que este ultimo termine su trabajo antes de continuar.
+
+```c
+sem_t s;
+
+void *child(void *arg) {
+  printf("child\n");
+  sem_post(&s); // Señaliza que el hijo ha terminado
+  return NULL;
+}
+
+int main( int argc, char *argv[]) {
+  sem_init(&s, 0, X); // ¿Cual debe ser el valor de X? 0
+  printf("parent: begin\n");
+  pthread_t c;
+  pthread_create(&c, NULL, child, NULL);
+  sem_wait(&s); // Espera por la señal del hijo
+  printf("parent: end\n");
+  return 0;
+}
+```
+
+En este caso, el padre debe esperar (`sem_wait()`) una señal que el hijo enviara al finalizar (`sem_post()`). Para que esto funcione, el valor inicial del semaforo (X) debe ser 0. Esto garantiza que si el padre llega a esperar antes de que el hijo haya terminado, se bloqueara. Analicemos los dos posibles casos:
+
+#### Caso 1: El padre se ejecuta antes de que el hijo llame a `sem_post()`
+
+1. El padre llama a `sem_wait(&s)`. El valor del semaforo es 0.
+2. `sem_wait` decrementa el valor a -1. Como es negativo, el padre se bloquea, pasando al estado *Sleep*.
+3. Eventualmente, el hijo se ejecuta, realiza su trabajo y llama a `sem_post(&s)`.
+4. El valor del semaforo se incrementa de -1 a 0.
+5. La operacion `sem_post` despierta al padre, moviendolo al estado *Ready* para que pueda continuar su ejecucion.
+
+#### Caso 2: El hijo se ejecuta y termina antes de que el padre espere
+
+1. El hijo se ejecuta y llama a `sem_post(&s)`. El valor del semaforo se incrementa de 0 a 1.
+2. Cuando el padre llega a `sem_wait(&s)`, el valor del semaforo es 1.
+3. `sem_wait` decrementa el valor a 0. Como el resultado no es negativo, el padre continua inmediatamente sin bloquearse.
+
+En ambos casos, el orden deseado (el padre termina despues del hijo) se cumple.
+
+### El Problema del Productor/Consumidor (Buffer Acotado)
+
+El problema del Productor-Consumidor, tambien conocido como buffer acotado. En el, uno o mas hilos **Productores** generan datos y los colocan en un buffer compartido de tamaño finito. Simultaneamente, uno o mas hilos **Consumidores** extraen y procesan esos datos. La sincronizacion es necesaria para evitar que los productores escriban en un buffer lleno y que los consumidores lean de un buffer vacio.
+
+#### Primer intento
+
+Una primera solucion utiliza dos semaforos para gestionar el estado del buffer:
+* `empty`: Inicializado a `MAX` (el tamaño del buffer), cuenta el numero de espacios vacios.
+* `full`: Inicializado a 0, cuenta el numero de espacios ocupados.
+
+El productor espera en `empty` antes de añadir un elemento y señaliza en `full` despues. el consumidor hace lo contrario.
+
+```c
+// Logica del Productor
+sem_wait(&empty);
+put(i);
+sem_post(&full);
+
+// Logica del Consumidor
+sem_wait(&full);
+get(i);
+sem_post(&empty);
+```
+
+Esta solucion funciona bien para un unico productor y un unico consumidor. Pero, con multiples productores-consumidores, presenta una condicion de carrera. Por ejemplo, si dos productores ejecutan `put()` casi simultaneamente, podrian pasar la verificacion `sem_wait(&empty)` y escribir ambos en la misma posicion del buffer (`buffer[0]`) antes de que el indice `full` se actualice, provocando la perdida de datos.
+
+#### Añadiendo Exclusion Mutua
+
+Para solucionar la condicion de carrera, es necesario proteger el acceso al buffer con el *lock* de exclusion mutua, que podemos implementar con un semaforo binario inicializado en 1. Un intento seria rodear toda la logica del productor y del consumidor con el *lock*.
+
+```c
+// Logica del Productor
+sem_wait(&mutex);
+sem_wait(&empty);
+put(i);
+sem_post(&full);
+sem_post(&mutex);
+
+// Logica del Consumidor
+sem_wait(&mutex);
+sem_wait(&full);
+get(i);
+sem_post(&empty);
+sem_post(&mutex);
+```
+
+Esta solucion es erronea porque puede provocar un **Interbloqueo** (***Deadlock***). Condieremos el siguiente escenario:
+1. El buffer esta vacio (`full` es 0).
+2. El consumidor se ejecuta primero. Adquiere el `mutex`.
+3. A continuacion, llama a `sem_wait(&full)`. Como el buffer esta vacio, el consumidor se bloquea, pero sigue manteniendo el *lock* `mutex`.
+4. El productor se ejecuta. Para poder desbloquear al consumidor (produciendo un dato y llamando a `sem_post(&full)`), primero debe adquirir el *lock* `mutex`.
+5. el productor llama a `sem_wait(&mutex)` y se bloquea, ya que el consumidor lo tiene.
+
+Ambos hilos quedan bloqueados indefinidamente, esperando un recurso que el otro posee.
+
+#### Solucion Final
+
+El error anterior se soluciona reduciendo el alcance del *lock*. El `mutex` solo debe proteger las operaciones que manipulan directamente el buffer y sus indices (`put()` y `get()`), no las operaciones de espera en `empty` y `full`.
+
+```c
+// Logica del Productor
+sem_wait(&empty);
+sem_wait(&mutex);
+put(i);
+sem_post(&mutex);
+sem_post(&full);
+
+// Logica del Consumidor
+sem_wait(&full);
+sem_wait(&mutex);
+get(i);
+sem_post(&mutex);
+sem_post(&empty);
+```
+
+Esta version, el *lock* se adquiere antes de acceder al buffer y se libera inmediatamente despues. Las esperas (`sem_wait`) en `empty` y `full` ocurren fuera de la seccion critica. De este modo, un hilo puede bloquearse esperando a que el buffer se llene o se vacie sin impedir que otros hilos adquieran el `mutex` para cambiar el estado del buffer, y eventualmente, despertarlo.
+
+### *Locks* de Lectura-Escritura
+
+Los *locks* de lectura-escritura son una primitiva de sincronizacion mas flexible, diseñada para estructuras de datos donde las operaciones de lectura son mucho mas frecuentes que las de escritura. su objetivo es permitir el acceso concurrente a multiples lectores siempre que no haya ningun escritor, pero garantizar el acceso exclusivo para un unico escritor.
+<br>La implementacion con semaforos utiliza dos semaforos (`lock` y `writelock`) y un contador (`readers`).
+
+```c
+typedef struct _rwlock_t {
+  sem_t lock; // lock binario
+  sem_t writelock; // permite UN escritor o MUCHOS lectores
+  int readers; //  numero de lectores en la seccion critica
+} rwlock_t;
+
+void rwlock_init(rwlock_t *rw) {
+  sem_init(&rw->lock, 0, 1);
+  sem_init(&rw->writelock, 0, 1);
+  rw->readers = 0;
+}
+```
+
+* `rwlock_acquire_readlock`: un lector primero adquiere un lock binario para proteger el contador `readers`. Incrementa `readers`. El paso crucial ocurre si el primer lector (`readers == 1`). En este caso, este lector es responsable de adquirir el `writelock`, lo que bloquea a cualquier escritor que intente entrar. Finalmente, libera el *lock*, permitiendo que otros lectores antren.
+* `rwlock_release_readlock`: El lector adquiere *lock* para modificar el contador de forma segura. Decrementa `readers`. Si es el ultimo lector en salir (`readers == 0`), es su responsabilidad liberar el `writelock`, permitiendo asi que un escritor, si estaba esperando, pueda proceder. Finalmente, libera el *lock*.
+* `rwlock_acquire_writelock`/`rwlock_release_writelock`: Estas funciones son muy simples: Simplemente adquieren (`sem_wait`) y liberan (`sem_post`) el `writelock`, garantizando que solo un escritor pueda acceder a la vez y bloqueando tanto a otros escritores como a todos los lectores.
+
+Las principales desventajas de esta implementacion es el riego de inanicion. si hay un flujo constante de nuevos lectores, es posible que un escritor nunca tenga la oportunidad de adquirir el `writelock`, ya que el contador `readers` nunca llegara a 0.
+
+### Los Filosofos Cenando
+
+El problema de los filosofos cenando es un ejercicio clasico de concurrencia planteado por Dijkstra. Entre cada par de filosofos hay un tenedor (cinco en total). Para comer, un filosofo necesita tomar los dos tenedores adyacentes: El de su izquierda y el de su derecha. 
+
+#### Primer Intento
+
+Una solucion intuitiva consiste en que cada filosofo intente tomar primero su tenedor izquierdo y luego el derecho. Podemos modelar cada tenedor como un semaforo inicializado en 1.
+
+```c
+void get_forks(int p) {
+  sem_wait(&forks[left(p)]);
+  sem_wait(&forks[right(p)]);
+}
+```
+
+Esta solucion conduce a un interbloqueo. Si todos los filosofos deciden comer al mismo tiempo y cada uno logra tomar su tenedor izquierdo, todos se quedaran bloqueados indefinidamente esperando por el tenedor derecho, que esta en manos del filosofo vecino. Se crea asi una dependencia ciclica de la que ningun hilo puede salir.
+
+#### Soluciona Funcional
+
+La Solucion mas simple para evitar el interbloqueo es romper la simetria en la adquisicion de recursos. Si un filosofo adquiere los tenedores en un orden diferente al resto, la dependencia ciclica se rompe. Por ejemplo, podemos hacer que el ultimo filoso (el numero 4) tome el tenedor derecho y luego el izquierdo.
+
+```c
+void get_forks(int p) {
+  if (p == 4) {
+    sem_wait(&forks[right(p)]); // Primero el derecho
+    sem_wait(&forks[left(p)]); // Luego el izquierdo
+  } else {
+    sem_wait(&forks[left(p)]); // Primero el izquierdo
+    sem_wait(&forks[right(p)]); // Luego el derecho
+  }
+}
+```
+
+Con este cambio, ya no es posible que todos los filosofos se queden bloqueados con un solo tenedor en la mano. Al menos un filosofo (el numero 4 o sus vecinos) podra adquirir ambos tenedores, comer y liberarlos, permitiendo que el sistema progrese.
+
+### Regulacion de Hilos
+
+Otro uso practico de los semaforos es la regulacion de hilos, una "region intensiva en memoria", requiere una gran cantidad de memoria para ejecutarse. Si todos lo hilos entran en esta region a la vez, la demanda de memoria podria superar la memoria fisica disponible, provocando ***Thrashing*** (intercambio constante de paginas con el disco) y degradando gravemente el rendimiento del sistema.
+
+Un semaforo puede resolver este problema de manera elegante:
+1. Se inicializa un semaforo a un valor `N`, donde `N` es el numero maximo de hilos que permite que esten en la region critica simultaneamente.
+2. La region critica se rodea con `sem_wait()` y `sem_post()`.
+
+Los primeros `N` hilos que llegan podran entrar tras decrementar el semaforo. El hilo `N+1` se bloqueara en `sem_wait()` hasta que uno de los hilos que estan dentro termine y llame a `sem_post()`, liberando un "espacio".
+
+### Como Implementar Semaforos
+
+Los semafotos son una primitiva de alto nivel, pero pueden implementarse utilizando primitivas de bajo nivel, como *locks* y variables de condicion. A continuacion se presenta una implementacion llamada ***Zemaphores***.
+<br>La estructura de datos de un *Zemaphore* contiene un valor entero, un *lock* y una variable de condicion.
+
+```c
+typedef struct __Zem_t {
+  int value;
+  pthread_cond_t cond;
+  pthread_mutex_t lock;
+} Zem_t;
+
+void Zem_wait(Zem_t *s) {
+  mutex_lock(&s->lock);
+  while (s->value <= 0) {
+    cond_wait(&s->cond, &s->lock);
+  }
+  s->value--;
+  mutex_unlock(&s->lock);
+}
+
+void Zem_post(Zem_t *s) {
+  mutex_lock(&s->lock);
+  s->value++;
+  cond_signal(&s->cond);
+  mutex_unlock(&s->lock);
+}
+```
+
+La logica de las operaciones es la siguiente:
+* `zem_wait()`: El hilo adquiere el *lock*. Usa un bucle y `cond_wait()` para esperar hasta que el valor del semaforo sea mayor que 0. Una vez que puede proceder, decrementa el valor y libera el *lock*.
+* `zem_post()`: El hilo adquiere el *lock*, incrementa el valor y señaliza (`cond_signal`) a un posible hilo en espera antes de liberar el *lock*.
+
+Una sutil diferencia con la definicion original de Dijkstra es qu en esta implementacion el valor del semaforo llega a ser negativo. Esto significa que el invariante clasico, donde el valor absoluto del semaforo negativo indica el numero de hilos en espera, ya no se mantiene en esta implementacion moderna.
+
+## Capitulo 32: Problemas Comunes de Concurrencia
