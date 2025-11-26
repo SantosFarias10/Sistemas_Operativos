@@ -37,6 +37,8 @@ Dios los bendiga 🚬
 - [Capitulo 31: Semaforos](#capitulo-31-semaforos)
 - [Capitulo 32: Problemas Comunes de Concurrencia](#capitulo-32-problemas-comunes-de-concurrencia)
 
+### [Persistencia](#persistencia)
+
 # Virtualizacion de la CPU
 
 ## Capitulo 4: La Abstraccion de los Procesos
@@ -2698,3 +2700,59 @@ La logica de las operaciones es la siguiente:
 Una sutil diferencia con la definicion original de Dijkstra es qu en esta implementacion el valor del semaforo llega a ser negativo. Esto significa que el invariante clasico, donde el valor absoluto del semaforo negativo indica el numero de hilos en espera, ya no se mantiene en esta implementacion moderna.
 
 ## Capitulo 32: Problemas Comunes de Concurrencia
+
+### *Non-Deadlock Bugs*
+
+#### *Atomicity-Violation Bugs*
+
+La serializabilidad deseada entre accesos a memoria multiples es violada (se espera una ejecucion atomica pero no es asi durante la ejecucion). Normalmente (pero no siempre) la solucion es directa; poner *locks* alrededor de la zona a proteger.
+
+#### *Order-Violation Bugs*
+
+El orden deseado entre dos (o mas), accesos a memoria no es respetado. La solucion usual es el uso de variables de condicion, pero el uso de semaforos tambien puede servir.
+
+### *Deadlock Bugs*
+
+Ocurre cuando hay una dependencia de *locks* entre hilos. Por ejemplo, si un hilo T1 tiene el *lock* L1 y esta esperando por L2, pero el hilo T2 tiene en su poder L2, y esta esperando por L1.
+
+![](../Teorico-practico/imagenes/Deadlock.png)
+* Ciclo indicativo de un *Deadlock*.
+
+En un caso simple con asegurar el orden de adquisicion de los *locks* bastaria para evitar el problema, pero en codigos mas complejos es necesario construir un sistema de *locking* que evite el *deadlock* potencial en las dependencias circulares que ocurren naturalmente en el codigo.
+<br>Otra razon por la que ocurren *deadlocks* es debido a la **Encapsulacion** de las implementaciones y las construcciones en forma modular, las cuales pueden interaccionar con los *locks*.
+
+#### Condiciones para un *Deadlock*
+
+Se deben cumplir todas las condiciones para que ocurra un *deadlock*:
+* ***Mutual Exclusion***: Hilos reclaman control exclusivo sobre recursos que necesitan.
+* ***Hold-and-wait***: Hilos mantienen recursos asignados a ellos (por ejemplo: *lock*) mientras esperan por recursos adicionales (otro *lock*).
+* ***No Preemption***: Los recursos no pueden ser removidos "a la fuerza" de los hilos que los tienen.
+* ***Circular Wait***: Existe una cadena circular de hilos de forma que cada hilo mantiene control de uno o mas recursos que estan siendo solicitados por el siguiente hilo en la cadena.
+
+#### Prevenir *Circular Wair*
+
+Una forma de prevenirlo es escribir codigo proveyendo un orden total en la adquisicion de los *locks*. En sistemas complejos con muchos *locks* esto es complicado y se usa un orden parcial para estructurar la adquisicion.
+<br>Tanto orden total como parcial requieren un cuidadoso diseño de estrategias de *locking*. Al ser solo una convencion, un programador que ignore el protocolo puede causar *deadlocks*.
+
+#### Prevenir *Hold-and-wait*
+
+Puede ser evitado adquiriendo atomicamente todos los *locks* a la vez. Esto requiere un *lock* global de prevencion que debe ser adquirido antes que los demas, lo cual genera algunos problemas; se necesita saber con anterioridad que *locks* requiere el hilo para obtenerlos de antemano, lo cual se complica con la encapsulacion. Esto disminuye drasticamente la concurrencia ya que los *locks* son controlados antes, en vez de serlo solo cuando son necesarios para el hilo, disminuyendo tambien el rendimiento.
+
+#### Prevenir *No Preemption*
+
+Generalmente los *locks* se encuentran en estado *held* hasta la llamada de `unlock()`, por lo que los hilos se mantienen esperando. Algunas librerias proveen rutinas para tratar de obtener el *lock* (*trylock*) que devuelvan un codigo de error este si esta en control de otro hilo (*held*).
+<br>Esto genera un nuevo problema; si dos hilos intentan esto y fallan continuamente en conseguir el *lock*, no se produce un *deadlock* pero el programa no progresa; un ***Livelock***. Una solucion es poner un retraso (generalmente aleatorio) antes de reintentar, disminuyendo las posibilidades de competencia entre hilos. Esto significa retomar un *lock* por la fuerza, solo posibilita tratar de obtener el *lock*.
+
+#### Prevenir *Mutual Exclusion*
+
+La tecnica es evitar la necesidad de exclusion mutua. Para ello se pueden construir estructuras de datos que no requieran *locks* explicitos (*lock-free*) usando instrucciones de hardware.
+
+#### Evitar *Deadlocks* a Traves del *Scheduler*
+
+En vez de prevenir *deadlocks*, se los evita. Requiere conocimiento global de que *locks* pueden ser solicitados por los hilos durante su ejecucion, para que el *scheduler* los ejecute de forma tal que se garantice que no ocurra un *deadlock*. Este enfoque disminuye la concurrencia; no es muy usado.
+
+#### Detectar y Recuperarse
+
+Ante la ocurrencia de un *deadlock*, emplear un sistema de deteccion y recuperacion. Un detector corre periodicamente, construyendo un grafico de los recursos y chequeando por ciclos. Si hay un *deadlock* se elimina uno de los procesos o, en casos graves, se reinicia todo el sistema.
+
+# Persistencia
