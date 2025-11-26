@@ -2756,3 +2756,122 @@ En vez de prevenir *deadlocks*, se los evita. Requiere conocimiento global de qu
 Ante la ocurrencia de un *deadlock*, emplear un sistema de deteccion y recuperacion. Un detector corre periodicamente, construyendo un grafico de los recursos y chequeando por ciclos. Si hay un *deadlock* se elimina uno de los procesos o, en casos graves, se reinicia todo el sistema.
 
 # Persistencia
+
+## Capitulo 36: Dispositivos I/O
+
+Los dispositivos de entrada/salida (I/O) son un componente fundamental de cualquier sistema informatico. Su importancia es tal que un sistema sin ellos pierde su proposito. Un programa sin ninguna entrada siempre producira el mismo resultado, volviendose predecible y limitado. Por otro lado, un programa sin ninguna salida ejecuta sus calculos en el vacio, sin un proposito visible para el usuario. Para que los sistemas informaticos sean funcionales e interesantes, tanto la entrada como la salida son requisitos indispensables.
+
+### Arquitectura del Sistema
+
+La arquitectura fisica de un sistema informatico es el punto de partida para entender la interaccion con los dispositivos I/O. Esta estructura no es arbitraria; responde a limitaciones impuestas por la fisica y el coste, optimizando el rendimiento al colocar los componentes mas rapidos y costosos mas cerca de la unidad central de procesamiento (CPU).
+
+#### Arquitectura Clasica
+
+La arquitectura "clasica" organiza el sistema en una jerarquia de buses compartidos.
+
+![](../Teorico-practico/imagenes/ArquitecturaClasica.png)
+* Jerarquia de conexiones; sistema de arboles. Las interfaces (conectores) usadas por los dispositivos son estandar para todos los fabricantes y deben corresponderse en compatibilidad fisica, electrica y logica (protocolo de comunicacion).
+
+En la imagen se ve una arquitectura de sistema prototipico, representando visualmente el compromiso entre velocidad, coste y distancia fisica a la CPU. En la cima, la CPU y la memoria se conectan mediante un "**Bus de Memoria**" corto y de alta velocidad. De este, se deriva un "**Bus General de I/O**" (por ejemplo, PCI) mas lento para dispositivos de alto rendimiento como una tarjeta grafica. En la base de la jerarquia, un "**Bus Periferico de I/O**" (por ejemplo, SCSI, SATA, USB) se conecta al bus general, agrupando dispositivos de bajo rendimiento como discos, teclados o ratones, que puedan tolerar una mayor latencia y un menor ancho de banda.
+
+Esta estructura jerarquica se justifica por dos razones principales:
+1. **Fisica**: Los buses de alta velocidad, como el bus de memoria, deben ser fisicamente cortos para mantener la integridad de la señal. Esto limita el numero de dispositivos que se pueden conectar directamente.
+2. **Coste**: La ingenieria de buses de alto rendimiento es cara. Por ello, se reserva para componentes criticos como la memoria y los graficos, mientras que utilizan dispositivos mas lentos se agrupan en buses perifericos mas economicos y largos, que puedan acomodar un mayor numero de dispositivos.
+
+#### Arquitectura Moderna
+
+En sistemas modernos han evolucionado para superar los cuellos de botella de los buses compartidos, adoptando arquitecturas mas complejas que utilizan interconexiones **Punto a Punto** de alta velocidad. Este salto evolutivo permite conexiones dedicadas para los componentes mas exigentes.
+
+![](../Teorico-practico/imagenes/ArquitecturaModerna.png)
+
+En el diagrama se muestra una arquitectura de sistema moderna que muestra el cambio hacia conexiones dedicadas. La CPU tiene enlaces punto a punto de alto rendimiento con la memoria y la tarjeta grafica (via PCIe), evitando la contencion de un bus compartido. La CPU se comunica con un "**Chip de I/O**" centralizado (a traves de DMI), que actua como un concentrador para el resto de los perifericos, ofreciendo conexiones especializadas como eSATA para discos, USB para dispositivos de bajo rendimiento y ranuras PCIe adicionales para componentes de alto rendimiento como una tarjeta de red.
+
+En esta configuracion, la CPU mantiene conexiones directas y de alto rendimiento con la memoria y los graficos. El resto de los dispositivos se conectan a un chip de I/O centralizado, que gestionan las diferentes interfaces (como eSATA, USB y PCIe) para los perifericos.
+
+### Dispositivos Canonicos
+
+Para entender los principios de interaccion con el hardware sin perdernos en detalles de cada dispositivo especifico (discos, tarjeta de red, etc), es util emplear un modelo abstracto o "canonico". Este modelo represneta las caracteristicas comunes a la mayoria de los dipositivos de I/O.
+
+Un dispositivo canonico consta de dos componentes claves:
+* **La Interfaz de Hardware**: Es la cara que el dispositivo presenta al SO. Se compone de un conjunto de registros (estado, comando, datos) que el software del sistema puede leer y escribir para controlar el dispositivo. Es analoga a la API de un software.
+* **La Estructura Interna**: Esta es la parte especifica de la implementacion del dispositivo, responsable de ejecutar las operaciones. Puede variar desde un simple conjunto de chips hasta un sistema complejo con su propio microcontrolador, memoria y software interno especializado, conocido como ***Firmware***.
+
+![](../Teorico-practico/imagenes/DispositivoCanonico.png)
+* Ejemplo de dispositivo de hardware canonico y sus partes principales
+
+En el diagrama se muestra un dispositivo canonico que ilustra la separacion entre la interfaz de control y la logica de implementacion. La seccion "interfaz" muestra los tres registros (estado, comando, datos) que el sistema puede manipular externamente. La seccion "Interna" representa la caja negra de la implementacion, que contiene un microcontrolador (CPU), memoria y "otros chips especificos de hardware" que realizan el trabajo real.
+
+Estos dispositivos son computadoras en si mismas (poseen CPU, registros, RAM, ROM, protocoloes de comunicacion) que corren un software interno especializado, conocido como ***Firmware***.
+<br>Los dispositivos tambien pueden diferenciarse por como comparten datos entre si; los de **Bloque** permiten que se pueda volver a leer informacion que ya se paso, y de **Caracter** no.
+
+El SO utiliza la interfaz de hardware siguiendo un conjunto de reglas o protocolos para comunicarse con el dispositivo y solicitarle que realice tareas.
+
+### Protocolo
+
+El dispositivo de ejemplo esta compuesto por 3 registros, a traves de los cuales el SO lo controla:
+* ***Status Register***, el cual muestra el estado del dispositivo.
+* ***Command Register***, el cual le indica al dispositivo que realice cierta tarea.
+* ***Data Register***, el cual envia o recibe datos.
+
+```c
+while (STATUS == BUSY); // wait until device is not busy
+
+Write data to DATA register
+Write command to COMMAND register
+  (starts the device and execute the command)
+
+while (STATUS == BUSY); // wait until device is done with your request
+```
+* Interaccion tipica del SO con un dispositivo
+
+Un protocolo de comunicacion es el conjunto de pasos que el SO debe seguir para interactuar con la interfaz de un dispositivo. El protocolo mas basico y sencillo se basa en el **Sondeo** (***Pollin***).
+<br>Este protocolo se desarrolla en cuatro pasos:
+1. **Sondear el Estado**: El SO lee repetidamente el registro de estado del dispositivo en un bucle, esperando a que el bit de "ocupado" (*BUSY*) se desactive. Esta espera activa es precisamente lo que se conoce como **Sondeo** (***Polling***) y asegura que el dispositivo esta listo para recibir un nuevo comando.
+2. **Transferir Datos**: El SO escribe los datos necesarios para la operacion en el registro de datos del dispositivo. Cuando la CPU se encarga directamente de este movimiento de datos, la tecnica se conoce como **Entrada/Salida Programada** (***Programmed I/O*** o ***PIO***).
+3. **Enviar el Comando**: El SO escribe el comando deseado (por ejemplo, "leer", "escribir") en el registro de comando. Esta accion inicia la operacion en el dispositivo.
+4. **Esperar la Finalizacion**: El SO vuelve a sondear el registro de estado en un bucle, esperando a que el dispositivo complete la operacion y deje de estar ocupado.
+
+Aunque este protocolo es funcional por su simplicidad, su principal desventaja es la ineficiencia. El sondeo consume ciclos de CPU de manera activa mientras simplemente espera, un tiempo que podria ser utilizado por otros procesos para realizar trabajo util.
+
+### Reduccion de la Sobrecarga (*Overhead*) de la CPU con Interrupciones
+
+El protocolo anterior resulta ineficiente ya que haciendo *polling* de un dispositivo lento desperdicia demasiado *CPU time*. Esto puede evitarse, por ejemplo, cambiando en un *context switch* al proceso que espera por otro que pueda aprovechar el CPU. Luego, cuando el dispositivo termine su operacion, puede enviar un *hardware interrupt*, causando un ***Interrupt Handler*** que despierte al proceso que hizo I/O.
+<br>De esta forma, los *interrupts* permiten hacer ***Overlap***; superponer procesos para que cuando uno se bloquee esperando un I/O, otro pueda ejecutarse en ese tiempo.
+
+Este enfoque no resulta eficiente para dispositivos rapidos, los cuales se ven relentizados por los *context switch*. Tampoco para *networks*, donde muchos paquetes pueden generar cada uno un *interrupt* y llevar a un ***Livelock*** donde el SO no pueda ejecutar ningun *user program*.
+
+Por ello, si el dispositivo es rapido se hace ***Polling***, y si es lento se usan ***Interrupts***. Si no se conoce la velocidad del mismo (o esta puede variar) se usa un enfoque **Hibrido** de **Dos Fases**, haciendo *polling* por un corto periodo y lanzando una interrupcion si el dispositivo no termino.
+
+Otra optimizacion basada en *interrupts* es el ***Coalescing***, en el cual un dispositivo que requiere un *interrupt* espera un poco antes de entregarlo al CPU. Mientras tanto, otros pedidos de I/O podrian terminar, pudiendo juntar multiples *interrupts* en uno solo, disminuyendo asi el ***Overhead***.
+
+### Movimientos de Datos mas Eficientes con DMA
+
+Cuando ocurre un PIO (I/O con el CPU involucrado) encargado de transferir un bloque de datos a un dispositivo, el CPU se sobrecarga con una tarea trivial, ya que enviar datos es lento. 
+
+![](../Teorico-practico/imagenes/Tiempo1.png)
+* Tiempo de CPU en ejecucion y en el cpiado de memoria principal hacia el dispositivo (c).
+
+La solucion a ello es usar un ***Direct Memory Access*** (DMA); un dispositivo especifico encargado de hacer transferencias de datos entre otros dispositivos y la memoria principal sin intervencion del CPU. Para usarlo, el SO informa al DMA donde se encuentran los datos en memoria, cuantos debe copiar, y a que dispositivo debe mandarlos. Luego, el CPU queda libre y puede realizar otra tarea.
+<br>Cuando el DMA termina, hace un *interrupt* que le da a conocer al SO que la transferencia ya termino, pudiendo el proceso que realizo el I/O retomar su ejecucion.
+
+![](../Teorico-practico/imagenes/Tiempo2.png)
+* Tiempo de copiado de memoria al disco desacoplado al del CPU, gracias al uso de un DMA.
+
+### Metodos de Interaccion con Dispositivos
+
+Para la comunicacion entre el SO y los dispositivos se pueden utilizar dos metodos diferentes:
+* **Tener Instrucciones de I/O Explicitas**, las cuales especifican una manera en la que el SO puede mandar datos a los registros de un dispositivo especifico, permitiendo la construccion de protocolos como el ya visto. Dichas instrucciones son privilegiadas y el SO es la unica entidad con permisos para manejar los dispositivos.
+* **Usar una ***Memory-Mapped I/O***** (memoria mapeada) con la cual el hardware hace que los registros de los dispositivos se vean como direcciones de memoria, las cuales pueden ser accedidas por el SO mediante un *load* (*to read*) o un *store* (*to write*) en la direccion. Es el hardware quien direciona dicha accion al dispositivo.
+
+### *Drivers* de Dispositivos
+
+Para que los dispositivos, cada uno con su interfaz especifica, puedan encajar en los distintos SO generales, se utilizan una **Abstraccion** en el nivel mas bajo llamada el ***Device Driver***; la pieza de software en el SO que sabe en detalle como funciona el dispositivo. Cualquier forma de interaccion con el mismo esta encapsulada en su interior. Son necesarios para cualquier dispositivo que se conecte al sistema, los cuales son descubiertos y cargados por el kernel.
+
+![](../Teorico-practico/imagenes/StackDelDispositivo.png)
+* *Stack* del sistema de dispositivos usados por Linux.
+
+En la imagen se puede ver que un sistema de archivos (o una aplicacion por encima de este) le pasa inadvertida la especificacion de que clase de disco se esta usando; simplemente realiza un pedido de ***Block*** *read/write* al bloque generico, el cual redirecciona al ***Driver*** de dispositivo apropiado, el cual maneja los detalles de ejecutar el pedido especifico.
+<br>El diagrama tambien muestra la interfaz ***Raw*** a los dispositivos, la cual permite aplicaciones especiales (como un ***File-System Checker*** o una herramienta de **Desfragmentacion de Discos**).
+
+## Capitulo 37: Discos Duros
+
