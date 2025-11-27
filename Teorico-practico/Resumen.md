@@ -41,6 +41,7 @@ Dios los bendiga 🚬
 - [Capitulo 36: Dispositivos I/O](#capitulo-36-dispositivos-io)
 - [Capitulo 37: Discos Duros](#capitulo-37-discos-duros)
 - [Capitulo 39: Archivos y Directorios](#capitulo-39-archivos-y-directorios)
+- [Capitulo 40: Implementacion del File System](#capitulo-40-implementacion-del-file-system)
 
 # Virtualizacion de la CPU
 
@@ -3002,3 +3003,160 @@ Otra tarea hecha por los *schedulers* del disco es el **I/O Merging**; ante un p
 El SO puede seguir una politica de enviar los pedidos de I/O al disco tan pronto como los recibe, lo cual es llamado ***Work-Conserving*** (el disco nunca para mientras haya pedidos), o esperar un poco por si llega un nuevo y mejor pedido de I/O, lo cual es denominado ***Non-Work-Conserving*** y mejora la eficiencia general.
 
 ## Capitulo 39: Archivos y Directorios
+
+Un dispositivo de almacenamiento persistente (***Persisten Storage***), como un **Disco Duro** o un **Disco de Estado Solido**, almacena informacion de forma permanente (al menos un largo tiempo).
+
+### Archivos y Directorios
+
+Para la virtualizacion del almacenamiento se utilizan dos abstracciones clave:
+
+El **Archivo** (***File***) es un array de bytes, donde cada uno puede ser escrito o leido. Cada archivo tiene un ***Low-Level Name*** (El Nombre por el cual el SO lo identifica), normalmente un numero llamado ***Inode Number***.
+
+La mayoria de los SO no conoce la lectura del archivo (imagen, archivo de texto, etc); la unica responsabilidad del ***File System*** (**Sistema de Archivos**) es almacenar dichos datos de forma persistente en el disco para que esten disponibles al ser requeridos.
+<br>El **Directorio** (***Directory***) tiene un *low-level name* y su contenido es una lista de pares "**Nombre** que ve el usuario" y "***Low-Level Name***" (un diccionario que asocia nombres e *inode numbers*).
+<br>Los directorios son almacenados en otros directorios, creando asi un **Arbol de Directorios** (o **Jerarquia de Directorios**; ***Directory Hierarchy***). Dicha jerarquia comienza en un **Directorio Raiz** (***Root***) y se usa un **Separador** para nombrar los subsecuentes **Sub-Directorios** hasta el archivo o directorio deseado. Siguiente dicho nombre se puede obtener el ***Absolute Pathname*** (**Ruta Absoluta**). Los directorios y archivos pueden tener el mismo nombre mientras no esten en la misma localizacion del arbol del sistema de archivos.
+
+Los archivos suelen tener dos partes en su nombre separadas por un punto; la primera es el nombre del mismo y la segunda indica el **Tipo** de archivo. Esto es solo una **Convencion**, no hay nada que asegure que un archivo contenga lo que declara contener.
+<br>Si un archivo pesa menos de 12 bits, puede ser guardado directamente en el **Inode** (en lugar de en un bloque de data) para ahorrar espacio.
+
+La relacion entre el tamaño de los archivos (*file size*, FS) y el espacio que verdaderamente usa en el disco (*Disk Usage*, DU) puede ser:
+* **FS > DU**: El sistema "miente" indicando espacio libre que en realidad no esta disponible, apuntando a un bloque de disco que no existe.
+* **FS = DU**: Ocurre en sistemas como Ext4.
+* **FS < DU**: Sucede al guardar archivos menores al tamaño minimo de bloque, o al guardar una traza de *inodes* de forma secuencial.
+
+### Interfaz del *File System*
+
+Las siguientes son diferentes formas en las que un *file system* permite interactuar con el almacenamiento persistente y las abstracciones creadas sobre este:
+
+#### Crear archivos
+
+Puede hacerse con la *system call* ***Open*** con la *flag* ***O_CREAT***.:
+
+```c
+int fd = open("foo", 0_CREAT | 0_WRONLY | O_TRUNC, S_IRUSR | S_IWUSR);
+```
+
+Las ***Flags*** del ejemplo indican que si el archivo no existe, debe ser creado (***O_CREAT***), que solo puede ser escrito (***O_WRONLY***), y que, si el archivo ya existe, debe ser truncado a 0 bytes borrando su contenido (***O_TRUNC***). El tercer parametro especifica los **Permisos** que tendra el archivo, haciendo que pueda ser leido y escrito por el creador (***S_IRUSR | S_IWUSR***).
+
+La funcion `open` devuelve un ***File Descriptor*** (**FD**); un entero privado por cada proceso usado en sistemas UNIX para acceder a archivos; una vez es creado se utiliza el FD para leer/escribir en el mismo (si se tienen los permisos), por lo que se considera que el FD es una "***Capability***" (**Capacidad**); un poder para realizar cirtas operaciones.
+
+Los *file descriptors* son manejados por el SO y almacenados en la estructura del proceso. Un array (con un numero maximo) mantiene un registro de los archivos que tienen abierto a la vez cada proceso. Cada entrada del array es un puntero a la **Estructura del Archivo**, y permite ver la informacion del mismo.
+
+#### Leer y Escribir en Archivos
+
+Para acceder y leer un archivo ya existente se debe abrir (`open`) el archivo y luego usar la *syscall* ***Read***. Recordar cerrar el archivo.
+
+```shell
+prompt> strace cat foo
+...
+open("foo", O_RDONLY | O_LARGEFILE)     =3
+read(3, "hello\n", 4096)                =6
+write(1, "hello\n", 6)                  =6 
+hello
+read(3, "", 4096)                       =0
+close(3)                                =0
+...
+prompt>
+```
+* Ejemplo de traza de *system calls* llamadas por `cat` sobre el archivo `foo`. Para rastrear las *syscalls* hechas por un proceso durante su ejecucion se usa ***Strace***.
+
+En el programa de ejemplo se abre un archivo solo para lectura. `open` devuelve el FD 3 (3 porque cada proceso ya tiene abiertos 3 FD: 0 para `stdin`, 1 para `stdout` y 2 para `stderr`), por lo que a partir de ahora el SO ya sabe a que archivo se refiere el proceso con FD 3. El primer `read` lee "hello", luego usa `stdout` FD = 1 para escribir (`write`) por pantalla lo que leyo. Al intentar leer nuevamente ve que ya no queda nada por leer, por lo que cierra el archivo con `close(3)` (refiriendose al FD 3).
+
+#### Leer y Escribir en Archivos No Secuenciales
+
+Para escribir o leer de un archivo de forma no secuencial, sino desde un lugar determinado, se usa un ***Offset*** para indicar el lugar de comienzo (a diferencia del caso anterior que usaba el principio del archivo). Para ello se usa la *system call* ***Lseek***.
+
+```c
+off_t lseek(int fildes, off_t offset, int whence);
+```
+
+El primer argumento usado es el **FD**, el segundo es la **Posicion** en el archivo, y el tercero determina como se realiza la **Busqueda** (absoluta, relativa o dependiendo del tamaño del archivo):
+* Si `whence == SEEK_SET`, el *offset* se setea a *offset* bytes.
+* Si `whence == SEEK_CUR`, el *offset* se setea a su posicion actual + *offset* bytes.
+* Si `whence == SEEK_END`, el *offset* se setea al tamaño del archivo + *offset* bytes.
+
+Parte de la abstraccion de un archivo abierto es que siempre se tiene un ***Offset Actual*** (lugar donde "se esta") que determina donde hacer el siguiente lectura/escritura., y se actualiza implicitamente cuando ocurre *read/write* de `N` bytes (*offset* = *offset* + `N`) o explicitamente con `lseek()`. El *offset* se guarda en la estructura propia del archivo, la cual tambien permite al SO determinar los permisos del mismo a que archivo se apunta (*inode*) y el *current offset*. Dichas estructuras representan a todos los archivos abiertos, y el conjunto de elleas es la ***Open Files Table***.
+
+#### Entradas Compartidas de la *File Table*
+
+Generalmente la relacion entre FD y una entrada en la *file table* es 1-a-1. Incluso si mas de un proceso lee el mismo archivo al mismo tiempo, cada uno tendra su propia entrada en la *open file table* ya que cada lectura/escritura es independiente y tiene su propio *offset*.
+
+Sin embargo, una ***Entry*** en la *open file table* puede ser **Compartida**. Esto sucede cuando un padre crea un hijo con `fork()`, donde el hijo ajusta su *offset* con `lseek()` y luego se crea. Esto resulta util cuando se esta trabajando de forma cooperativa en el mismo archivo. Otro caso de *entry* compartida es el de la `dup()` *syscall*, la cual permite al nuevo proceso crear otro FD que refiera al mismo archivo que ya esta abierto. Esto es util cuando se escriben operaciones de **Redireccion** (por ejemplo, de *output*), creando un FD que apunte al archivo deseado e intercambiando el *stdout* que tienen un proceso por dicho FD.
+
+![](../Teorico-practico/imagenes/OpenFileTable.png)
+* Entrada de la *open file table* compartida por dos procesos; padre e hijo.
+
+El campo `refcnt` (***Reference Count***, **Contador de Referencias**) indica la cantidad de procesos que han abierto el archivo de la *entry*, la cual solo sera removida cuando tal contador llegue a 0.
+
+#### Escribir de Forma Inmediata
+
+Cuando un proceso llama a `write()` le solicita al SO que escriba ciertos datos en **Almacenamiento** persistente en algun momento del futuro cercano. El *file system*, por razones de desempeño, **Amortigua** (***Buffer***) dichos `writes` en memoria por algun tiempo antes de ser ejecutados por el dispositivo de almacenamiento. Aunque este proceso puede ser rapido, hay casos en los que un *crasheo* puede llevar a la perdida de dicha memoria si esta aun no llego a escribirse en disco.
+
+Para aplicaciones **Criticas**, existen protocolos de recuperacion de datos que necesitan la habilidad de **Forzar** escritura a disco. El *file system* de UNIX provee una API llamada `fsync(int fd)`, la cual fuerza a escribir todos los datos **Sucios** (***Dirty***, aun en el *buffer*) al disco, en el archivo especificado por el FD, y retornar cuando todos los `writes` se hayan completado.
+
+#### Renombrar Archivos
+
+En una linea de comandos puede lograrse con el comando `mv`, el cual llama a la *syscall* `rename(char *old, char *new)`, que toma el nombre viejo y el nuevo. La *syscall* `rename` es critica, por lo que normalmente es ejecutada de forma atomica.
+
+#### Obtener Informacion Sobre Archivos
+
+El sistema mantiene ciertas informacion sobre cada archivo, la cual es llamada ***Metadata***. Para leerla se usan las *syscalls* `stat()` y `fstat()`, las cuales toman un *pathname* o FD a un archivo y leen una estructura `stat` en la cual se encuentran datos como *size*, *inode number*, *ownership*, ultima vez que fue accedido o modificado, etc,
+<br>La mayoria de los sistemas guardan esta informacion en una estructura llamada ***Inode***, los cuales estan en disco pero normalmente se copian a memoria aquellos que estan en uso para lograr un acceso mas rapido (ya que seguramente deban ser actualizados).
+
+#### Eliminar Archivos
+
+El comando `rm` usa, entre otras llamdas varias, la *syscall* `unlink()`, la cual toma el archivo a ser removido y devuelve 0 si tiene exito. Notar que su nombre es `unlink`, no *delete* ni *remove*.
+
+#### Crear Archivos
+
+Se utiliza la *syscall* `mkdir()`. Una vez creado el directorio, este se considera vacio aunque se genera con dos entradas dentro; **Si mismo** y su "**Padre**" ("padre" en el arbol de directorios).
+
+No se puede escribir directamente en un directorio; usar `write()` escribiria en la metadata del mismo, la cual esta protegida por el *file system*. Debe escribirse en el directorio de forma **Indirecta**, ya que es la forma en la que el sistema protege la integridad de los directorios.
+
+#### Leer Directorios
+
+En vez de abrir un directorio si fuera un archivo, se usan un grupo de 3 *syscalls*: `opendir()`, `readdir()` y `closedir()`. Estas se llaman en un ciclo que lee las entradas del directorio de a una hasta que este vacio, imprimiento cada vez el **Nombre** e **Inode** del archivo que lee.
+
+La estructura interna de un directorio (`struct dirent`) mapea el nombre de cada archivo del directorio con su *inode number* y otros datos (*offset* al siguiente *direct*, tamaño y su tipo).
+
+#### eliminar Directorios
+
+Los directorios se borran llamando a `rmdir()`, la cual requiere que previamente el directorio este vacio, con el fin de evitar eliminar archivos involuntariamente.
+
+#### *Hard Links*
+
+Una forma de crear una *entry* en el arbol del *file system* (ademas de crear un nuevo archivo) es a traves de la *syscall* `link()`, la cual toma como argumento un *pathname* viejo y uno nuevo. Al hacer `link` de un archivo viejo con uno nuevo se crea una nueva forma de referirse al mismo archivo viejo; ahora dos nombres refieren al mismo archivo (al mismo *inode number* que el archivo original) pero el archivo en si no se copia de ninguna forma.
+
+Al generar un *file* se crea una estructura (*inode*) que contiene la informacion sobre el archivo, y luego se "linkea" un nombre que el usuario puede ver a ese *inode* y se pone ese `link` en el directorio. Al usar `unlink()` para borrar un archivo, se reduce el ***Reference Count*** (***Link Count***) del *inode number* y, si ya no ha referencias, se libera el *inode* y los bloques de memoria asigados.
+
+#### *Links* Simbolicos
+
+Los *hard links* son limitados ya que no se puede crear uno para un directorio (para evitar un ciclo en el arbol de directorios) y no se puede hacer un *hard link* a archivos almacenados en otras particiones del disco (porque los *inodes* solo son unicos en cada *file system*, no se comparten entre *file system*, por lo que se podria repetir el mismo numero). En estos casos se usa un ***Symbolic Link*** (o ***Soft Link***). Su creacion es similar a la de un *hard link* y funciona de la misma forma, pudiendo acceder a un mismo archivo a traves de dos nombres diferentes.
+<br>La diferencia reside en que un *soft link* es un archivo en si mismo, de un tipo diferente; no es un *file* ni un directorio, sino que es de un tercer tipo. Un *soft link* esta formado por el *pathname* del archivo al que esta linkeado en forma de un dato dentro del archivo *soft link*.
+<br>Por la forma en la que estan creados se abre la posibilidad de una ***Dangling Reference*** (**Referencia Colgante**) si se borra el archivo origianl (ya que eso no implica que el *soft link* se borre).
+
+### Bits de Permiso
+
+El *File system* presenta una virtualizacion amigable del disco. A diferencia de las abstracciones del CPU y la memoria, los archivos suelen ser compartidos entre procesos y no ser privados.
+
+El mecanismo de ***Permission Bits*** (**Bits de Permiso**) consiste en asignar a cada archivo/directorio/*softlink* una serie de bits que determinan quien puede acceder a los mismos. se dividen en tres grupos: Lo que puede hacer el **Dueño** del archivo, lo que puede hacer alguien que pertenezca a un **Grupo**, y lo que puede hacer cualquiera (normalmente llamado ***Other***).
+
+```shell
+prompt> ls -l foo.txt
+-rw-r--r-- 1 remzi wheel 0 Aug 24 16:29 foo.txt
+```
+* Ejemplo de Bits de permiso para un archivo; lectoescritura para el dueño, y solo permiso de lectura tanto para el grupo como para "cualquiera".
+
+Consiste en 10 bits. El primero indica el **Tipo**; '-' para un archivo, 'd' para un directorio y '1' para un *soft link*. Los siguientes 9 indican los **Permisos**; 3 para el *owner*, los siguientes 3 para el grupo y los ultimos 3 para "cualquiera". Estos paquetes de tres consisten en un bit de ***read***, uno de ***write*** y uno de **Ejecucion**, los cuales valen 'r', 'w' y 'x' si estan permitidos, o '-' si no lo estan.
+
+El dueño del archivo puede cambiar estos permisos son el comando `chmod`, el cual modifica el ***File Mode*** del archivo. En los directorios el bit de ejecucion otorga permiso al usuario para hacer cosas como cambiar directorios dentro del mismo, lo que en combinacion del bit de *write* permite crear archivos dentro del directorio.
+
+Otros *file system* usan controles diferentes, como por ejemplo un ***ACL*** (**Access Control List**) por cada directorio; una forma mas poderosa de representar quien puede acceder a cada recurso.
+
+### Crear y Montar un *File System*
+
+Para ensamblar el arbol de directorios a partir de muchos sistemas de archivos subyacentes, se crea un nuevo *file system* y se lo monta para hacer sus contenidos accesibles. Para ello se usa la herramienta `mkfs`, la cual recibe como *input* un dispositivo (la particiion de un disco) y un tipo de *file system*, y escribe un *file system* vacio empenzando en el directorio ***root*** de esa particion.
+
+Una vez dicho *file system* es creado, debe ser accesible dentro del *file system tree* mas general, para lo cual se usa el programa `mount`. Esta toma el ***Mount Point*** (**Punto de Montaje**) y un directorio ya existente, y pega el *file system* a montar en el arbol de directorios en ese punto.
+
+## Capitulo 40: Implementacion del *File System*
