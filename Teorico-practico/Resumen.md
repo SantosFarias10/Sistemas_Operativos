@@ -38,6 +38,9 @@ Dios los bendiga 🚬
 - [Capitulo 32: Problemas Comunes de Concurrencia](#capitulo-32-problemas-comunes-de-concurrencia)
 
 ### [Persistencia](#persistencia)
+- [Capitulo 36: Dispositivos I/O](#capitulo-36-dispositivos-io)
+- [Capitulo 37: Discos Duros](#capitulo-37-discos-duros)
+- [Capitulo 39: Archivos y Directorios](#capitulo-39-archivos-y-directorios)
 
 # Virtualizacion de la CPU
 
@@ -2875,3 +2878,127 @@ En la imagen se puede ver que un sistema de archivos (o una aplicacion por encim
 
 ## Capitulo 37: Discos Duros
 
+Los *drivers* son la principal forma de persistencia de almacenamiento de datos en los sistemas de computadoras y la mayor parte de los sistemas de archivos se basan en su comportamiento.
+
+### La Interfaz
+
+El *driver* de un disco consiste en un numero de **Sectores** (bloques de 512 bytes) los cuales pueden ser leidos o escritos y estan numerados de 0 a `n-1`, para un disco de `n` bloques. Eso es llamado el ***Address Space del Driver***. Un disco puede ser visto como un array de sectores.
+
+Las operaciones con multiples sectores son posibles y muchos *File System* pueden leer o escribir 4KB a la vez (o mas), pero cuando se escribe en el disco el *driver* solo asegura la Atomicidad en la escritura de bloques de 512 bytes. Por ende, si la computadora se apaga solo una parte de la escritura se guarda (esto es llamado ***Torn Write*** o **Lectura Rasgada**).
+<br>Se asume que el acceso a dos bloques cercanos entre ellos dentro del *driver address space* es mas rapido que si estuvieran lejos uno del otro, y que acceder a los bloque de forma secuencial, uno detras de otro, es la forma mas rapida de hacerlo.
+
+### Geometria
+
+El primer componente de un disco es el ***Platter*** (**Plato**); una superficie circular dura donde los datos son almacenados de forma persistente al inducir cambios magneticos. Un disco puede tener uno o mas platos y cada uno de ellos tiene dos lados llamados ***Surface*** (**Superficie**).
+
+Los platos estan unidos alrededor del ***Spindle*** (**Eje**) el cual esta conectado a un motor que gira los platos a un ritmo constante (fijo y preestablecido) medido en **Rotaciones por Minuto** (**RPM**). Por ejemplo, un disco moderno con ritmo de 10000 RPM implica que cada rotacion dura 6 ms.
+
+Los datos son codificados en sectores circulares concentricos llamados ***Tracks*** (**Pistas**). Una sola superficie contiene cientos de pistas, cada una con cientos de sectores los cuales son la unidad minima de informacion que puede ser leida o escrita. El conjunto de las pistas con igual radio (misma distancia al eje), de ambas caras de todos los platos, son llamado un **Cilindro**.
+
+Para leer y escribir en la superficie se utiliza un ***Disk Head*** (**Cabezal del Disco**); mecanismo que permite sentir (no toca al plato) los patrones magneticos o introducir un cambio en ellos. Hay uno por superficie (dos por plato) y esta unido a un ***Disk Arm*** (**Brazo del Disco**), el cual se mueve a traves de la superficie para poner el cabezal encima de la pista deseada.
+<br>La rapidez de movimiento de estas dos partes es el principal limitante en la velocidad de estos dispositivos. Este cuello hace que sea muy importante colocar los datos de forma lo mas continua posible (desfragmentada).
+
+Asi, cualquier informacion en disco se lee/escribe siguiendo un sistema de cuatro "coordenadas"; plato, superficie, pista y sector.
+
+![](../Teorico-practico/imagenes/PistaDeUnPlato.png)
+* Una pista de un plato, con su correspondiente eje, brazo y cabezal sobre el sector seis.
+
+### Latencia de una Sola Pista: Retraso Rotacional
+
+Para procesar un pedido, estando ya dentro de la pista deseada, el disco debe esperar que el sector deseado rote hasta estar bajo el cabezal. Esto es el ***Rotation Delay*** (**Retraso Rotacional**).
+<br>Si el retraso de rotacion total del plato es `R`, el disco debera esperar un promedio `R/2` para que el bloque deseado este bajo el cabezal (o, en el peor de los casos, espera `R`).
+
+### Tiempo de Busqueda: *Seek Time*
+
+![](../Teorico-practico/imagenes/MultiplesPistas.png)
+* Ejemplo de disco con multiples pistas con un *set* de sectores cada una.
+
+Los discos modernos tienen multiples pistas. Un pedido de lectura (en el ejemplo, al sector 11) implica que, antes de poder esperar a la rotacion del sector deseado, el brazo debe mover el cabezal a la pista correcta. El tiempo promedio de ese proceso es llamado ***Seek Time*** (**Tiempo de Busqueda**).
+
+Recien una vez el sector se encuentra bajo el cabezal se puede iniciar la fase de transferencia de datos. El tiempo de la operacion es la suma del *seek time* y el retraso de rotacion.
+
+$$
+SeekTime + RotationDelay
+$$
+
+#### Otros Detalles
+
+Mientras el brazo se mueve para cambiar de pista, el disco sigue rotando. Por ello, muchos *drivers* emplean algun tipo de ***Track Skew*** (**Desviacion de la Pista**), haciendo que el primer sector de una pista no este alineado con el ultimo de la pista anterior, para asegurar que las lecturas secuenciales sean eficientes cuando se cruza ese limite (cambio de pista).
+
+![](../Teorico-practico/imagenes/TackSkew.png)
+* *Tack Skew* de datos secuenciales (sectores 23 y 24) en pistas diferentes.
+
+Las pistas exteriores tienen mayor longitud y por lo tanto mas sectores que los interiores, por lo que son llamadas ***Multi-Zoned Disk Drivers*** (**Multi Zonas del Disco**). A igual cantidad de sectores (como en la imagen) las pistas interiores tendran mayor dencidad de informacion.
+
+Una parte importante de los discos es el **Cache**, algunas veces llamado ***Track Buffer***. Es una pequeña memoria que el disco usa para mantener datos que fueron leidos del disco o escrito.
+<br>Por ejemplo, si el *drive* esta leyendo un sector de una pista puede decidir leerlos todos y guardarlos en el cache por si hay un uso posterior en el corto plazo, ahorrando asi tiempo. En escritura, el *drive* puede elegir informar que la escritura se ha completado cuando los datos estan en su memoria cache (***Write Back Caching***, rapido pero riesgoso), o cuando se han terminado de escribir en disco (***Write Through***).
+
+La interfaz fisica de comunicacion del disco es lo que limita la velocidad de transferencia del mismo con la computadora. Los estandares de interfaz son, por ejemplo, SATA, USB, etc.
+
+### Calculo de Tiempo de I/O
+
+La performance de un disco, en particular su ***I/O Time***, puede ser representado como:
+
+$$
+T_{I/O} = T_{seek} + T_{rotation} + T_{transfer}
+$$
+
+Esto es asi porque leer/escribir un dato consta de esos tres momentos (posicionar el cabezal en la pista indicada (***seek***), esperar a que el disco rote para que el bosque se posicione bajo el cabezal (***Rotation Delay***), y por ultimo leer/escribir efectivamente el sector (**Tiempo de Transferencia Maxima** (sin mover cabezal, no la promedio), dado por el ancho de banda maximo)).
+
+El ritmo del I/O **($R_{I/O}$** o **Tasa de Transferencia de Lectura al Azar**) para un tamaño de datos se usa para comparar discos y es el tamaño transferido dividido por el tiempo que tomo:
+
+$$
+R_{I/O} = \frac{Size_{Transfer}}{T_{I/O}}
+$$
+
+No confudir con la velocidad de transferencia dada en las tablas de decripcion de los discos, la cual hace referencia a la velocidad para datos secuenciales.
+
+Para analizar la diferencia en desempeño, los tipos de cargas de trabajo pueden dividirse en **Accesos Random** (aleatorio) o ***Sequential*** (secuenciales), y los discos pueden ser separados en los centrados en ***High Performance*** (alto desempeño, altas rotaciones, bajo *seek time*, transferencias rapidas) o en ***Capacity*** (capacidad de datos).
+<br>La mayor diferencia de desempeño entre los discos centrados en *performance* o capacidad se ve ante cargas de trabajo de accesos aleatorios, pero son "casi" iguales para accesos secuenciales.
+
+Por ejemplo, para calcular cuanto tardaria un acceso random de 4KB *read* en un disco *high performance*, usamos los datos del fabricante:
+
+$$
+T_{seek} = 4ms\\
+T_{rotation} = 2ms\\
+T_{transfer} = 30 microsecs
+$$
+
+* $T_{seek} = 4ms$ es un promedio, no la busqueda total (la  cual puede ser mas del doble).
+* El *delay* ($T_{rotation}$) se calcula directamente de los RPM; 15000 RPM son 250 RPS, por que cada rotacion son 4ms, y el disco tendra un promedio de media rotacion de 2ms.
+* El $T_{transfer}$ es el tiempo que toma la operacion, dada la tasa de transferencia (velocidad, dato) y el tamaño del archivo. No es para averiguar cuanto tiempo demora en comenzar.
+
+Asu, $T_{I/O} = 4ms + 2ms + 0,03ms = 6,03ms$, por lo que el $R_{I/O}$ para 4KB es de $\frac{4KB}{6,03ms} = 0,66MB/s$.
+
+### Planificacion en el Disco
+
+Frente a varios pedidos de I/O, el SO los administra mediante el ***Disk Scheduler*** el cual examina los pedidos y decide cual correr a continuacion (orden). A diferencia del *scheduler* de procesos, el de disco puede hacer una aproximacion bastante acertada de cuanto va a tardar un I/O (al calcular *seek time* y el posible retraso de rotacion) por lo que puede elegir ejecutar primero al pedido que menos va a tardar en completarse (seguir el principio de *Shortest Job First* (**SJF**)).
+
+#### SSFT: *Shortest Seek Time First*
+
+Ordena la lista de *request* (pedidos) de I/O por pista y elige el *request* mas cercano a completarse en esa pista, y asi en cada pista. No es ideal porque la geometria del *drive* no esta disponible para el SO; solo es un array de bloques (no ve su forma circular en el plato del disco).
+<br>Esto se puede arreglar implementando ***Nearest-Block-First*** (**NBF**) (**El Bloque Mas Cercano Primero**), pero aun asi mantiene el problema de la ***Starvation*** para las pistas cuando hay muchos *requests* en la misma pista interior.
+
+#### *Elevator* (SCAN)
+
+Este algoritmo hace que el cabezal se mueva atras y adelante a traves del disco respondiendo a *request* en orden a traves de las pistas. Un solo paso a traves del disco en un ***sweep***. Si hay un *request* en una pista que ya se visito en este *sweep* debera esperar al siguiente en cola.
+
+Hay variantes de este algoritmo, como **F-SCAN** que congela la cola de pedidos cuando hace *sweep* y los pedidos que lleguen durante el *sweep* van a otra cola para ser atendidos luego, o **C-SCAN** (*circular scan*) que en vez de hacer *sweep* en ambas direcciones a traves del disco, solo cambia desde el exterior al interior, y va de vuelta a la exterior directamente para empezar de nuevo.
+<br>C-SCAN es mas justo para que las pistas exteriores e interiores, ya que SCAN favorecia las interiores visitandolas dos veces. Por sus caracteristicas, suele ser llamado ***Elevator Algorithm***.
+
+#### SPTF: *Shortest Positionen Time First*
+
+Las dos politicas de *scheduler* anteriores seguian el principio de SJF pero ignoran el tiempo de rotacion. SPTF elige el siguiente *request* a cumplir dependiendo del tiempo relativo del *seek* comparado a la rotacion. Si el *seek time* es mas alto se usa **SSFT**, pero si el *seek* es mas rapido que la rotacion, SPTF sirve para mejorar la *performance*.
+
+![](../Teorico-practico/imagenes/EjemploSPTF.png)
+* En este ejemplo, convendria responder al pedido del bloque 8 antes que el 16.
+
+#### Otros Problemas de *Scheduling*
+
+En los discos pueden acomodar multiples pedidos y tener sofisticado *schedulers* internos ellos mismos, por lo que el ***Scheduler del SO*** solo le pasa los pedidos que ve como las mejores opciones al *scheduler* del disco el cual, con el conocimiento de la posicion del cabezal, y de otros parametros, realiza el *scheduling* final.
+
+Otra tarea hecha por los *schedulers* del disco es el **I/O Merging**; ante un pedido de, por ejemplo, los bloques 33 y 34, el *scheduler* los combina en uno solo del bloque 33, reduciendo *overheads*.
+
+El SO puede seguir una politica de enviar los pedidos de I/O al disco tan pronto como los recibe, lo cual es llamado ***Work-Conserving*** (el disco nunca para mientras haya pedidos), o esperar un poco por si llega un nuevo y mejor pedido de I/O, lo cual es denominado ***Non-Work-Conserving*** y mejora la eficiencia general.
+
+## Capitulo 39: Archivos y Directorios
