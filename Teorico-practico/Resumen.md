@@ -1,5 +1,5 @@
 # Introduccion
-
+---
 ## Resumen de Santos, miembro de Wolovers
 
 Basado en el [Resumen](https://docs.google.com/document/d/1e5x10V286rX_EuQmJoCVOha-DTRf_hp-CFGZURr5f5Q/edit?tab=t.0) de Navier🧃, en las [Traducciones](https://github.com/GabrielHak/SistemasOperativos) de GabrielHak, y el [OSTEP](https://pages.cs.wisc.edu/~remzi/OSTEP/), mas los [Podcasts](https://open.spotify.com/show/5glisR9k3xqeMLwhDM92KZ?si=8fac02c5c1ea49e2) y notas tomadas en clases del Dios Nicolas Wolovick.
@@ -46,7 +46,7 @@ Dios los bendiga 🚬
 - [Capitulo 41: Localidad y Fast File System](#capitulo-41-localidad-y-fast-file-system)
 - [Capitulo 42: Consistencia ante Errores: FSCK y Journaling](#capitulo-42-consistencia-ante-errores-fsck-y-journaling)
 - [Capitulo 43: File System Estructurados por Logs](#capitulo-43-file-system-estructurados-por-logs)
-
+---
 # Virtualizacion de la CPU
 
 ## Capitulo 4: La Abstraccion de los Procesos
@@ -134,7 +134,7 @@ El SO tiene algunas estructuras de datos que guardan informacion. Para guardar e
   * Caso idealizado: un proceso de un solo hilo, que no realiza I/O ni llamadas al sistema, y se ejecuta continuamente en modo usuario sin interrupciones ni cambios de contexto.
 * ***UserTime > WallTime***
   * Esto puede pasar en procesos multihilo que se ejecutan realmente en paralelo, ya que el User Time total se suma entre los hilos, mientras que el Wall Time mide solo el tiempo real del proceso completo.
-
+---
 ## Capitulo 5: La Api de los Procesos
 
 La creacion de procesos, en Unix, se da con dos ***System Calls*** (Llamadas al sistema): `fork()` y `exec()`. Puede usarse `wait()` para esperar que un proceso creado termine.
