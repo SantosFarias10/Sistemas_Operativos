@@ -42,6 +42,8 @@ Dios los bendiga 🚬
 - [Capitulo 37: Discos Duros](#capitulo-37-discos-duros)
 - [Capitulo 39: Archivos y Directorios](#capitulo-39-archivos-y-directorios)
 - [Capitulo 40: Implementacion del File System](#capitulo-40-implementacion-del-file-system)
+- [Capitulo 41: Localidad y Fast File System](#capitulo-41-localidad-y-fast-file-system)
+- [Capitulo 42: Consistencia ante Errores: FSCK y Journaling](#capitulo-42-consistencia-ante-errores-fsck-y-journaling)
 
 # Virtualizacion de la CPU
 
@@ -3160,3 +3162,176 @@ Para ensamblar el arbol de directorios a partir de muchos sistemas de archivos s
 Una vez dicho *file system* es creado, debe ser accesible dentro del *file system tree* mas general, para lo cual se usa el programa `mount`. Esta toma el ***Mount Point*** (**Punto de Montaje**) y un directorio ya existente, y pega el *file system* a montar en el arbol de directorios en ese punto.
 
 ## Capitulo 40: Implementacion del *File System*
+
+El *file system* es la estructura de datos en disco que mantiene los archivos de forma consistente. El kernel mantiene diferentes ***Virtual File System*** para todos los formatods que sabe leer; UFS, FAT, exFAT, NTFS, ISO, EXT, etc. y cada particion puede tener un formato diferente (cada uno de los cuales tiene sus *features* y limitaciones).
+
+El **VSFS** (***The Very Simple File System***) es una version simplificada de un sistema de archivos de UNIX (**UFS**: *Unix File System*) usada para instroducir diferentes estructuras del disco, metodos de acceso y politicas.
+
+### Como Implementar un *File System*
+
+El funcionamiento del modelo se basa en dos aspectos claves:
+1. **Las Estructuras de Datos en el *File System***: Los tipos de estructuras *on-disk* (en disco) utilizadas por el *file system* para organizar sus datos y su metadata. Los sitemas mas sencillos usan estructuras simples (arrays de bloques), los mas complejos emplean estructuras de tipo arbol.
+2. **Los Metodos de Acceso del *File System***: Como se mapean las llamadas hechas por los procesos (`open`, `read`, `write`) en las estructuras de datos, que estructuras se lee/estriben en la ejecucion de cada *syscall* en particular, y que tan eficientemente se ejecutan esos procesos.
+
+### Organizacion General
+
+En VSFS el disco es dividido en bloques, numerados de 0 a N-1, usando un tamaño unico de bloque de 4KB. La mayor parte de estos bloques es usada para almacenar datos de usuario en lo que es llamada la ***Data Region***.
+
+La metadata que el *file system* guarda para cada archivo (permisos, tamaño, dueño, cuando se creo, cantidad de bloques asignados, etc) es guardada en una estructura llamada ***Inode***, para la cual se reserva un espacio en determinado bloques del disco llamado ***Inode Table***. La cantidad total de *inodes* almacenados (en cada bloque, por la cantidad de bloques reservados para ello) es el numero **Maximo de *Files*** que el *file system* va a poder almacenar.
+<br>Generalmente, cualquier informacion en el *file system* que no sea *user data* es llamada ***Metadata***.
+
+Las ***Allocation Structure*** (**Estructuras de Asignacion**) son usadas para determinar si los bloques estan ocupados o libres. Para ello VSFS emplea un **Bitmap**, estructura la cual usa un bit para cada bloque asignado (0 = libre, 1 = en uso). se necesita un bitmap por cada tipo de bloque a referenciar (uno para los de *inode*, otro para los de *user data*) y por simplicidad se usa un bloque para almacenar cada *inode* (por mas que un bit map de dos bloques de 4KB cada uno podria ver hasta 32KB objetos asignados).
+
+El bloque 0 es usado para el ***Superblock*** (**Superbloque**), el cual contiene la informacion sobre el *file system* (cantidad de *inodes* y *data blocks*, inicio de la *inode table*, etc) y es leido por el SO al momento de montaje para inicializar diferentes parametros y añadir el volumen al *file system tree*.
+
+![](../Teorico-practico/imagenes/DiscoSeparado.png)
+* Disco separado en N = 64 bloques, con una region de datos, una de *inodes* (*inodes table* de 5 bloques), dos bloques de bitmap y un bloque de *superblock*.
+
+### El *Inode*
+
+El nombre de ***Inode*** proviene de ***Index Node***, ya que originalmente los nodos se organizaban en un array. Cada *inode* esta implicitamente referenciado por un numero (el ***i-number***); el ***Low-level name*** mencionado en el capitulo anterior. En VSFS dado un *i-number* podemos calcular donde esta almacenado en el disco el *inode* al que se refiere.
+
+![](../Teorico-practico/imagenes/TablaDeInodos.png)
+* Tabla de inodos de 20KB (cinco bloques de 4KB); 80 nodos de 256 bytes cada uno.
+
+Por ejemplo, para leer el *inode* 32 en la tabla, el *file system* primero calcula el *offset* de la region de inodos (`inumber * sizeof(inode_t)` = 32 * 256B = 8192 B = 8 KB), lo suma a la **Direccion Inicial** de la *inode table* (12KB), y obtiene la direccion del bloque de *inodes* deseados (20KB *block*).
+
+Los discos no son direccionables por bytes sino por sectores, normalmente de 512 B cada uno. Por ende, para señalar el bloque de *inodes* que contiene al *inode* 32, el *file system* debera primero calcular el sector en el cual se aloja el bloque. ($\frac{20KB}{512B} = \frac{20 B * 1024}{512 B} = 40$).
+
+```c
+blk    = (inumber + sizeof(inode_t)) / blocksize;
+sector = ((blk * blocksize) + inodeStartAddr) / sectorSize;
+```
+* Ecucacion para calcular bloque y sector.
+
+Una forma en la que el *inode* puede referirse a donde estan los bloques de datos es tener dentro uno o mas ***Direct Pointers*** (*disk addresses*, punteros directos) en donde cada puntero se refiere a un bloque que pertenece al *file*. Dichos enfoque es limitado y no funciona para archivos mas grandes que el tamaño del bloque multiplicado por el numero de punteros directos en el *inode*.
+
+#### Indexacion de Multiple Nivel
+
+Una forma de dar soporte a archivos mas grandes es tener un puntero especial llamado ***Indirect Pointer*** que en vez de apuntar a un bloque con *user data* apunta a un bloque con punteros que apuntan a *user data*. Si un archivo se pasa del limite de tamaño, se usa un bloque de *data region* como bloque indirecto y un *indirect pointer* del *inode* pasa a apuntar a este bloque de punteros.
+
+Con bloques de 4KB y direcciones de disco de 4 bytes, un bloque añade 1024 punteros y un archivo (que por ejemplo, ya tenia 12 punteros directos) puede crecer hasta (12 + 1024) * 4KB = 4114KB.
+<br>Para dar soporte a archivos mas grandes se puede agregar un segundo puntero; el ***Double Indirect Pointer***. Este puntero apunta a un bloque que tiene punteros a bloques indirectos, los cuales contienen punteros a *data block*. De esta forma se pueden direccionar archivos de hasta 4GB. Si se requiere almacenar archivos mas grandes, se puede hacer un ***Triple Indirect Pointer***.
+
+Este enfoque ***Multi-Level Index*** genera un arbol imbalanceado, pero como la mayoria de archivos almacenados en los sistemas son pequeños, es eficiente.
+
+![](../Teorico-practico/imagenes/EstructuraDeInodes.png)
+* Estructura de *inodes* con hasta doble indireccion.
+
+### FAT
+
+Otros *file system*, como FAT (*File Allocation Table*), usan enfoques diferentes al anterior; en lugar de punteros indirectos usan una *linked list* (lista ligadas) para cada archivo. Cada entrada del arreglo *Directory Entry* apunta al primer bloque del archivo, el cual apunta al siguiente bloque (no necesariamente contiguo), etc. El ultimo bloque del archivo apunta a EOF (*End Of File*, por ejemplo '-1').
+<br>Al no almacenar en el *directory entry* otras entradas (como el *size* del archivo), este proceso secuencial hace que FAT sea malo para busquedas al azar, ya que las lecturas son de orden N (dependen del tamaño del archivo).
+
+Si dos archivos apuntan a un mismo bloque ("cadenas cruzadas"), o si se produce un ciclo, se produce una **Corrupcion** del *file system*. El programa para detectarlo es chkdsk.
+
+![](../Teorico-practico/imagenes/FAT.png)
+* Implementacion del FAT *file system*; forma de almacenar bloques de archivos.
+
+FAT12 = 12 bits para indices de bloques -> tengo hasta $2^{12}$ bloques = 4096 bloques -> si cada uno es de 4KB, el tamaño maximo del area de datos para este *file system* es $2^{12} * 2^{12} B = 2^{24} B = 16MB$.
+
+### Organizacion de Directorios
+
+En VSFS un directorio solo contiene una lista de pares (***Entry Name***, ***Inode Number***); por cada archivo o directorio en un directorio se tienen un string y un numero en la *data block*(s) del mismo.
+
+![](../Teorico-practico/imagenes/EjemploDirectorio.png)
+* ejemplo de directorio 'dir' (*inode number* 5) con 3 archivos en disco (con *inodes* 12, 13 y 24). Ademas, se indica la longitud del nombre (incluyendo '\0') y el espacio sobrante (*reclen*). El directorio actual es la entrada '.', mientras que el directorio padre es la entrada '..'.
+
+Los *files systems* diferencian directorios de archivos normales especificando su tipo en un campo de sus *inodes*. El directorio tiene *data blocks* señalados por el *inode* (y tal vez bloques indirectos) que almacenan en la *data region*.
+<br>Cada tabla de directorios puede apuntar a archivos y a otros directorios, pero por consistencia un mismo nombre no puede apuntar a dos *inodes* diferentes. Notar que nada impide que usen ciclos de directorios.
+
+### Manejo del Espacio Libre
+
+En VSFS se usan dos bitmaps (para *inodes* y para *data*) para el manejo del espacio libre que siguen la pista de que inodos y bloques de datos estan libres y cuales asignados, permitiendo encontrar espacio al crear un *file* o directorio (y actualizar su estado a usado).
+<br>Algunas politicas de *pre-allocation* pueden ser usadas en este proceso, como elegir una secuencia de bloques libres de un tamaño minimo, para buscar un mejor rendimiento al usar una porcion contigua del disco.
+
+### Rutas de Acceso: Lectura y Escritura
+
+El flujo de operaciones para leer o escribir un archivo requiere involucrar una serie de operaciones de I/O y ***Access Path*** (rutas de acceso). En los siguientes casos se asume que el *file system* ya se monto (por lo tanto el *superblock* fue leido por el SO y cargado en memoria) pero que todo el resto (*inodes*, directorios, etc) sigue en disco.
+
+#### Leer un Archivo del Disco
+
+El primer paso es llamar a `open`, para lo cual el *file system* necesita encontrar el *inode* del archivo para obtener la informacion del mismo (permiso, tamaño, etc). Al recibir un *pathname*, primero debe atraversarlo para poder encontrar el *inode* del *file*. Para ello comienza en el ***Root Directory*** (**/**), leyendo el *inode* del mismo (para lo cual el *i-number* del *inode root*, el cual es conocido por el *file system* al ser montado y suele ser el numero 2).
+
+Luego, el *file system* busca punteros a *data blocks* en el *inode de root*, loc cuales señalan a los contenidos de *root directory* y permiten al *dile system* leer el directorio y buscar el *inode* del siguiente componente del *path name*. Este proceso se repite hasta atravesar el *path name* y llegar al *inode* deseado. El paso final de `open` es leer/escribir el *inode* de bar en memoria; el *file system* hace el check de permisos, asigna un ***File Descriptor*** para este proceso y retorna al usuario.
+
+Una vez abierto el archivo, se llama a `read`. A lo largo de la lectura se va actualizando el ***Last Time Access*** y el *offset* del *inode* (el cual empieza en 0 si se lee desde el comienzo del archivo, o en otro valor si se usa `lseek`). Se lee primer bloque del archivo, consultando al *inode* para ver donde se almacena dicho bloque, y se repite el mismo procedimiento con cada bloque del *file*.
+
+En algun punto se cierra el archivo, para lo cual el *file system* solo desasigna el espacio que le dio al *file descriptor*, sin involucrar ninguna operacion I/O. Notar que la cantidad de I/O que hace `open` depende de lo largo del *path name*; a mayor longitud, mas *inodes* deben ser buscados y leidos.
+
+![](../Teorico-practico/imagenes/OperacionesDeIO.png)
+* Operaciones de I/O en el proceso de lectura de un archivo con *datapath* de largo 2 ("/foo/bar/"). Linea de tiempo descendiente.
+
+#### Escribir en un Archivo del Disco
+
+Se realiza un `open` que sigue en el mismo proceso de atravesar el *datapath* que en el caso de las lecturas. Luego, la aplicacion llama a `write` para actualizar los contenidos del archivo.
+
+Escribir un archivo puede requerir **Asginar** (**Allocar**) un nuebo bloque (a menos que se sobreescriba en uno), por lo que antes de escribir los datos en disco se debe decidir que nuevo bloque asignarle, y por ende actualizar otras estructuras del disco de forma apropiada (como el *data bitmap* y el *inode*).
+<br>Por este motivo, cada `write` genera 5 operaciones de I/O: Una para **Leer** el *data bitmap* (encontrar un bloque libre), otra para **Escribir** en el bitmap (actualizarlo para marcar el nuevo bloque como asignado), dos para leer y luego escribir el *inode* (en el cual se actualiza la localizacion del bloque), y finalmente una mas para escribir los datos en el bloque en si.
+
+El costo es aun mas alto cuando se crea un archivo, ya que ademas de allocar el *inode* el sistema debe asignar espacio en el directorio que va a contener el nuevo archivo (una *entry*).
+
+![](../Teorico-practico/imagenes/OperacionesIO.png)
+* Operaciones de I/O en el proceso de creacion de un archivo usando un *datapath* de largo 2 ("`/foo/bar`") y escribiendo en el 3 bloques. Linea de tiempo descendiente. Notar qye requiere de 10 I/Os para crear el archivo y 5 I/Os por cada *alloc* de memoria.
+
+### Cache y *Buffers*
+
+El alto costo de cada operacion de I/O afecta el desempeño del *file system*. Por ello los primeros sistemas usaban una ***Fixed-Size Cache*** (Cache de un Tamaño Fijo) para mantener alli a los bloques mas utilizados. Pero, este **Particionamiento Estatico** de memoria puede causar un despercidio si se guarda mas espacio de memoria para la cache de la que se usa realmente.
+<br>Los sistemas actuales emplean **Particionamiento Dinamico**, en donde se integran paginas de memoria virtual en una **Cache de Paginas Unificadas**. De esta forma, la memoria puede ser asignada de forma flexible.
+<br>Esta cache es mas util en la lectura que en la escritura, ya que la primera no necesita un manejo individual para pasar los datos de forma persistente, cosa que la estructura  si. Frente a esto se usa un ***Write Buffering***, el cual disminuye los I/Os al **Retrasar** los `writes` y permitir al *file system* juntar varias actualizaciones en un solo **Lote** (o directamente evitarlos si, por ejemplo, un proceso crea o escribe un archivo pero luego lo borra), y ademas incrementa el desempeño al almacenar en un *buffer* en memoria un numero de `writes`, permitiendo al *scheduler* del sistema encargarse de los siguientes I/Os.
+
+Como se vio en el capitulo anterior, existe un *trade-off* al usar *buffers* de escrituras, ya que un crasheo del sistema podria llevar a que se pierdan los datos que aun no ha sido escrito en el disco, lo que hace que suelan ser usados por aplicaciones criticas.
+
+## Capitulo 41: Localidad y *Fast File System*
+
+Los primeros *file systems* eran simples y proveian las abstracciones necesarias (archivos y una jerarquia de directorios) mediante el uso de un *superblock* (S) que contenia la informacion de todo el *file system* (tamaño del volumen, cantidad de *inodes*, un puntero a la cabeza de una *free list*, etc), una region con los *inodes* del sistema, y una gran region de *data blocks*.
+<br>Toda la estructura necesaria por el *file system* que no sea datos de usuario, es ***Overhead***.
+
+![](../Teorico-practico/imagenes/EstructuraDelFileSystem.png)
+* Estructura de un *file system* simple.
+
+Sin embargo estos modelos tenian un mal desempeño ya que estaban diseñados sin tener en cuenta las caracteristicas del hardware de almacenamiento (discos rotacionales con pistas y cabezales que se benefician de la localidad de los datos) por lo que esparcian los datos (bloques) en diferentes ubicaciones (como si de una memoria RAM se tratase) generando gran **Fragmentacion**, lo que llevaba a tener grandes tiempos de busqueda para cada bloque ya que la lectura no se podia hacer de forma secuencial (incluso para bloques de un mismo archivo).
+<br>Frente a esto, eran muy usadas las herramientas de desfragmentacion para reorganizar los bloques de los archivos (y los bloques libres) de posicion contiguas.
+
+Otro problema de estos modelos era el tamaño de bloque; al ser muy pequeño (512 bytes) se disminuia la **Fragmentacion Interna** (minimizando el desperdicio de espacio dentro de cada bloque) pero hacia la transferencia de datos todavia mas ineficiente al requerir mas busquedas.
+
+### FFS: *Fast File System*
+
+Para solucionar esos problemas se creo el ***Fast File System*** (**FFS**) cuyo diseño de las estructuras del *file system* y de las politicas de asignacion de espacio son "*disk aware*" (conscientes del disco). Si bien la implementacion interna cambio, se mantuvo la misma interfaz (API).
+
+#### Grupo de Cilindros
+
+FFS organiza al disco en una coleccion de ***Cylinder Groups*** (**Grupos de Cilindros**). Un **Cilindro** es un conjunto de pistas (*tracks*) en diferentes superficies del disco que estan a la misma distancia del centro. Un numero de cilindros consecutivos forman un **Grupo**.
+
+![](../Teorico-practico/imagenes/PistasCilindro.png)
+* *Tracks* (pistas) en cilindros, formando grupos de cilindros en un disco de 6 platos.
+
+Los discos no aportan informacion al *file system* como para que este sepa si un cilindro particular esta en uso; solo informan el *address space* de los bloques y esconden los detalles de su geometria. Es por eso que los sistemas modernos organizan el disco en **Grupos de Bloques**, cada una de una **Porcion** consecutiva del *address space* del disco.
+
+![](../Teorico-practico/imagenes/MemoriaComoGrupos.png)
+* Seccion de memoria vista como grupos de bloques.
+
+Ya sea con cilindros o grupos de bloques, FFS asegura que si se colocan dos archivos en el mismo grupo y se accede a uno despues de otro, no se van a necesitar largas busquedas a traves del disco. Para almacenar archivos y directorios en estos grupos, el FFS necesita tener la habilidad de ponerlos en un bloque y seguir la pista de toda la informacion necesaria sobre ellos. Para esto, incluye en cada grupo de cilindros a las estructuras de un *file system*; espacio para *data blocks*, *inodes*, estructuras para localizar los lugares libres y asignados (un bitmap por region *inodes*/*data*). Ademas, por razones de fiabilidad se coloca una copia de respaldo del *superblock*.
+
+![](../Teorico-practico/imagenes/ContenidoDeGrupos.png)
+* Contenido de un grupo de cilindros usando FFS; *Superblock*, *inode bitmap*, *data bitmap*, *inodes*, datos.
+
+#### Politicas de Asignacion
+
+El FFS debe decidir como posicionar archivos y directorios (y la metadata asociada), buscando mantener "cosas relacionadas juntas, y no relacionadas separadas" para mejorar la *performance*. Para esto sigue dos politicas que permiten que los archivos esten cerca de sus *inodes* y que los *files* en un directorio esten cerca unos de otros:
+<br>Para el posicionamiento de directorios busca un grupo de cilindros con un bajo numero de directorios (para mantener un balance) y un alto numero de *inodes* libres, y pone los datos del directorio y su inodo en su grupo.
+<br>Para posicionar los archivos trata de asignar los bloques de cada *file* en el mismo grupo de bloques que su *inode* (para prevenir largas busquedas), y ademas posiciona a todos los archivos que estan en un directorio en el mismo grupo de cilindros en el que esta dicho directorio.
+
+Para los archivos grandes se aplica una excepcion en la politica de posicionamiento. Para evitar que estos llenen un grupo de bloques por completo, cada cierto numero de estos asignados en el primer grupo de bloques, FFS posiciona el siguiente "gran" pedazo del archivo en otro grupo (tal vez elegido por su bajo uso), y asi subsecuentemente hasta almacenar todo el archivo.
+<br>Para evitar que esta separacion en partes afecte la *performance*, se elige el tamaño de esas partes con cuidado para lograr que el tiempo usado en buscar la siguiente parte sea pequeña en comparacion al usado para transferir los datos de esa parte. Esta tecnica de reducir el *overhead* haciendo mas trabajo por cada "*paid overhead*" se llama ***Amortization***.
+
+#### Otros Aspectos de FFS
+
+Para disminuir la fragmentacion interna en los bloques de 4KB FFS utiliza **Sub-Bloques** de 512 bytes los cuales el *file system* asigna mientras el archivo crece, y al llegar a los 4KB libera los sub-bloques luego de copiarlos todos a un bloque de 4KB.
+<br>Para evitar los I/Os extra que esto supe, se suele utilizar un *buffer* de escrituras para hacerlas directamente en bloques de 4KB, evitando la creacion de sub-bloques cuando son innecesarios.
+
+Otros aspectos de FFS es la tecnica de **Parametrizacion**. Durante las lecturas secuenciales es lo suficientemente rapido para requisitar los siguientes bloques a leer antes de que estos pasen por el cabezal del disco, evitando rotaciones extra.
+<br>Ademas, a nivel usuario, FFS permitio **Nombres Mas Largos en los Archivos** (mas de 8 char) e introdujo los conceptos de ***Symbolic Link*** y *rename* atomico.
+
+## Capitulo 42: Consistencia ante Errores: FSCK y *Journaling*
+
