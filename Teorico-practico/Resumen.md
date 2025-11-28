@@ -77,14 +77,14 @@ Cualquier interfaz de procesos de un SO debe poder:
 * Tener **Control**: Otros tipos de control, como la suspencion de un proceso.
 * Conocer su **Estado**: Poder mostrar informacion de un proceso.
 
-Los programas utilizan estas funciones mediante System Calls Proporcionadas por la API.
+Los programas utilizan estas funciones mediante *System Calls* Proporcionadas por la API.
 
 ### Creacion de un Proceso
 
-Lo primero que hace el SO para correr un programa (osea, convertirlo en proceso) el SO debe **Cargar** su codigo y su informacion estatica (con un formato ejecutable) del Disco a la Memoria (Disco -> Memoria), en el Address Space del proceso.
-<br>Luego se debe proporcionar memoria ***Stack*** (variables locales, parametros de llamada, direcciones de retorno) y ***Heap*** (informacion dinamica y variables en tamaño, estructura de datos como Listas; todo lo relacionado con `malloc` y `free`) para el programa. En el Stack el SO establece los parametros `argv` y `argc count`.
+Lo primero que hace el SO para correr un programa (osea, convertirlo en proceso) el SO debe **Cargar** su codigo y su informacion estatica (con un formato ejecutable) del Disco a la Memoria (Disco -> Memoria), en el *Address Space* del proceso.
+<br>Luego se debe proporcionar memoria ***Stack*** (variables locales, parametros de llamada, direcciones de retorno) y ***Heap*** (informacion dinamica y variables en tamaño, estructura de datos como Listas; todo lo relacionado con `malloc` y `free`) para el programa. En el *Stack* el SO establece los parametros `argv` y `argc count`.
 <br>Se inicializan los ***File Descriptors*** (`std in`, `std out`, `std error`)(0, 1, 2).
-<br>Por ultimo , el SO setea todos los registros a 0 (menos el PC) y pasa el control de la CPU al proceso creado, dejandolo ejecutarse.
+<br>Por ultimo, el SO setea todos los registros a 0 (menos el PC) y pasa el control de la CPU al proceso creado, dejandolo ejecutarse.
 
 ![Creacion de un Proceso](../Teorico-practico/imagenes/CreacionDeUnProceso.png)
 * Memoria asignada a un proceso en el momento de su creacion.
@@ -101,16 +101,16 @@ Cada proceso puede estar en uno de los siguientes 4 estados:
 * Transiciones entre estados de un proceso.
 
 El paso entre los distintos estados esta dado por eventos del software o hardware, llamadas **Interrupciones** (por ejemplo: de reloj, del disco duro, etc).
-<br>A lo sumo, puede haber `n` procesos en estado de Running, siendo `n = cantidad de cores` (nucleos).
+<br>A lo sumo, puede haber `n` procesos en estado de *Running*, siendo `n = cantidad de cores` (nucleos).
 
-* Un proceso puede moverse entre los estados Ready y Running a discrecion del SO. 
-* Pasar de Ready a Running significa que el proceso ha sido **Planificado** (***Scheduled***);
-* Ser movido de Running a Ready significa que el proceso ha sido **Desplanificado** (***Descheduled***).
-* Si un proceso ha sido bloqueado, el SO lo mantendra asi hasta que ocurra algun evento; el proceso vuelve al estado Ready.
+* Un proceso puede moverse entre los estados *Ready* y *Running* a discrecion del SO. 
+* Pasar de *Ready* a *Running* significa que el proceso ha sido **Planificado** (***Scheduled***);
+* Ser movido de Running a *Ready* significa que el proceso ha sido **Desplanificado** (***Descheduled***).
+* Si un proceso ha sido bloqueado, el SO lo mantendra asi hasta que ocurra algun evento; el proceso vuelve al estado *Ready*.
 
 ### Estructura de Datos del SO
 
-El So tiene algunas estructuras de datos que guardan informacion. Para guardar el estado de cada proceso, el SO tiene algun tipo de ***Process List*** (**Listas de Procesos**) que sirve como el registro de todos los procesos activos en el sistema. Esta lista contiene informacion de todos los procesos que estan Ready, asi como aquellos que estan bloqueados o en ejecucion.
+El SO tiene algunas estructuras de datos que guardan informacion. Para guardar el estado de cada proceso, el SO tiene algun tipo de ***Process List*** (**Listas de Procesos**) que sirve como el registro de todos los procesos activos en el sistema. Esta lista contiene informacion de todos los procesos que estan *Ready*, asi como aquellos que estan bloqueados o en ejecucion.
 <br>Cada entrada de la lista corresponde un ***Process Control Block*** (**PCB**) (**Bloque de Control de Proceso**); estructura que almacena toda la informacion relevante sobre un proceso especifico. Contiene, entre otros campos:
 * ***Context*** (**Contexto**) de los registros: Cuando un proceso es detenido, el contenido de sus registros de CPU se guarda en esta estructura. Para reanudar el proceso, el SO simplemente restaura estos valores en los registros fisicos de la CPU.
 * ***State*** (**Estado**) del proceso: Este campo indica el estado actual del proceso.
