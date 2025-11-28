@@ -40,10 +40,12 @@ Dios los bendiga 🚬
 ### [Persistencia](#persistencia)
 - [Capitulo 36: Dispositivos I/O](#capitulo-36-dispositivos-io)
 - [Capitulo 37: Discos Duros](#capitulo-37-discos-duros)
+- [Capitulo 38: RAID](#capitulo-38-raid)
 - [Capitulo 39: Archivos y Directorios](#capitulo-39-archivos-y-directorios)
 - [Capitulo 40: Implementacion del File System](#capitulo-40-implementacion-del-file-system)
 - [Capitulo 41: Localidad y Fast File System](#capitulo-41-localidad-y-fast-file-system)
 - [Capitulo 42: Consistencia ante Errores: FSCK y Journaling](#capitulo-42-consistencia-ante-errores-fsck-y-journaling)
+- [Capitulo 43: File System Estructurados por Logs](#capitulo-43-file-system-estructurados-por-logs)
 
 # Virtualizacion de la CPU
 
@@ -3004,6 +3006,8 @@ Otra tarea hecha por los *schedulers* del disco es el **I/O Merging**; ante un p
 
 El SO puede seguir una politica de enviar los pedidos de I/O al disco tan pronto como los recibe, lo cual es llamado ***Work-Conserving*** (el disco nunca para mientras haya pedidos), o esperar un poco por si llega un nuevo y mejor pedido de I/O, lo cual es denominado ***Non-Work-Conserving*** y mejora la eficiencia general.
 
+## Capitulo 38: RAID
+
 ## Capitulo 39: Archivos y Directorios
 
 Un dispositivo de almacenamiento persistente (***Persisten Storage***), como un **Disco Duro** o un **Disco de Estado Solido**, almacena informacion de forma permanente (al menos un largo tiempo).
@@ -3334,4 +3338,114 @@ Otros aspectos de FFS es la tecnica de **Parametrizacion**. Durante las lecturas
 <br>Ademas, a nivel usuario, FFS permitio **Nombres Mas Largos en los Archivos** (mas de 8 char) e introdujo los conceptos de ***Symbolic Link*** y *rename* atomico.
 
 ## Capitulo 42: Consistencia ante Errores: FSCK y *Journaling*
+
+La estructuras de datos del *file system*, a diferencia de las de la memoria, deben ser persistentes. Por ello es necesario poder actulizarlas manteniendo consistencia ante **Perdida de Energia** o **Crasheos del Sistema** mientras se realiza ese proceso.
+
+Solo una operacion de lectura puede ser ejecutada a la vez, por lo que la posibilidad de dejar una estructura en estado **Inconsistente** no solo esta presente mientras se realiza una escritura, sino para las operaciones que se encuentran esperando en el *buffer*.
+
+El siguiente es un ejemplo de una **Carga de Trabajo** (***Workload***) que actualiza estructuras de disco adjuntando un *data block* a un archivo existente abriendo el *file*, llamando a `lseek()` para mover el *file offset* al final del *file*, y luego realizando un `write` de 4KB al *file* antes de cerrarlo.
+<br>Se asume una estructura de datos estandar, un *inode bitmap* (8 bit, 1 por *inode*), un *data bitmap* (8 bits, uno por bloque de datos), 8 *inodes* en 4 bloques y 8 *data blocks*.
+
+![](../Teorico-practico/imagenes/PrimerVersioInode.png)
+* Primera version del *inode*; l(v1). Estructura de disco con el bloque 4 y el *inode* 2 asignados y marcados en sus bitmaps.
+
+Al agregar un nuevo bloque se deben actualizar 3 estructuras en disco: ***inode*** (*pointer* hacia el nuevo bloque y actualizar el tamaño del *file*), ***Data Block*** (En la *data region estructure*), y el ***Bitmap*** de los *data blocks*.
+
+Es decir, el *file system* debe realizar 3 `writes` en disco, lo cual no puede suceder inmediatamanete ni a la vez; los nuevos datos esperan en un ***Page/Buffer Cache*** de memoria hasta que el *file system* decida escribirlos y el *file system* realice la *write call*. Si un crasheo ocurre una vez comenzados a escribirse en disco pero antes de que se completen los 3, el *file system* queda en un "*Funny State*".
+
+### Escenario de *Crash*
+
+Casos en los que solo un `write` se completa:
+
+* Solo el ***Data block*** se actualizo: Los datos estan en disco pero ningun *inode* apunta a ellos y el bitmap no indica que el bloque este asignado, por lo que es como si la estructura nunca hubiera sucedido. No es un problema desde el punto de problema de consistencia.
+* Solo el ***inode*** se actualizo: *Inode* apunta a donde deberia estar el *data block*, pero alli solo se encuentra **Basura**. El bitmap muestra al bloque como libre/no asignado pero el *inode* indica que hay informacion, por lo que se produce una inconsistencia en la estructura de datos.
+* Solo el ***Bitmap*** se actualizo: Se muestra al bloque como asignado pero no hay *inode* que apunte a este. Esta inconsistencia generara un ***Space Leak*** (perdida de espacio) ya que el bloque nunca podra ser usado por el *file system*.
+
+Casos en los que solo dos `writes` se ejecutan:
+
+* ***Inode*** y ***Bitmap*** actualizados: La metadata es consistente ya que el *inode* apunta al bloque correcto y el bitmap lo marca como asignado, pero el mismo contiene **Datos Basura**.
+* ***Inode*** y ***Data block*** actualizados: El *inode* aounta al bloque correcto y los datos estan ahi, pero el bitmpa no marca el bloque como asignado, lo que genera una inconsistencia.
+* ***Bitmap*** y ***Data block*** actualizados: Se genera una incosistencia entre el *inode* y el bitmap. El bloque fue escrito y se indica que esta en uso, pero ningun *inode* lo señala por lo que no se sabe a que *file* pertenece.
+
+Ante la posibilidad de que generen estructuras de datos incosistentes, lectura de datos basura al usuario y perdida de espacio, se busca modificar al *file system* de forma atomica entre un estado consistente y otro nuevo. Sin embargo el disco solo puede una escritura al mismo tiempo, lo cual genera un ***Crash Consistency Problem***.
+
+### Solucion 1: Verificar el Sistema de Archivos (FSCK)
+
+El enfoque consiste en dejar que sucedan incosistencias y, antes de que el *file system* se monte, ejecutar **FSCK** (***File System Checker***) para verificar su estado, encontrar esas inconsistencias y arreglarlas. Para garantizar el buen estado del *file system* FSCK analiza:
+
+* ***SuperBlock***: Chequeos de sensatez, principalmente que el tamaño del *file system* sea mayor al de los bloques asignados. Si esta corrupto, se puede usar una copia alternativa.
+* ***Free Blocks***: Se escanean *inodes* e *indirect blocks* para saber que bloques estan asignados al *file system* y generar una version correcta de los bitmaps e *inodes* asignados.
+* ***Inodes State***: Cada *inode* es chequeado por corrupcion y otros problemas (por ejemplo, que su campo `type` sea valido). Si se detectan incosistencias que no pueden arreglarse, el *inode* es eliminado y el bitmap correspondiente es actualizado acorde a ello.
+* ***Inode Links***: Se comprueba la cuenta de links de cada *inode* (cantidad de referencias al archivo) comparandolos con el resultado de escanear el arbol de directorios desde *root*. Si hay discrepancias se arreglan actualizando el valor del *inode*. Si se encuentra un *inode* asignado pero sin referencias, se lo mueve al directorio *lost+found*.
+* **Duplicados**: Se chequean punteros duplicados (dos inodos apuntando al mismo lugar) y puede decidirse copiar el bloque para que cada *inode* tenga el propio (y actualizar uno de esos punteros). si un *inode* se detecta como corrupto es eliminado.
+* ***Bad Blocks***: Se chequean punteros a bloques corruptos escaneando la lista de punteros. Un puntero es considerado corrupto si apunta fuera de su rango permitido (por ejemplo, a un bloque por fuera de su particion) y en este caso es eliminado.
+* ***Directory Checks***: Se verifica que las primeras dos entradas de cada directorio sean '.' y '..', ya que cada referencia a un *inode* esta asignada, y que ningun directorio este conectado a mas de un "padre" en la jerarquia de directorios.
+
+Al realizar tantas comprobaciones exhaustivas, FSCK resulta costoso y especialmente lento para discos de gran capacidad, por lo que en la actualidad otras soluciones son mas utilizadas.
+
+### Solucion 2: *Journaling* (*Write-Ahead Logging*: Registro de Escritura)
+
+Al momento de actualizar el disco, antes de sobreescribir las estructuras en su lugar, se escribe en una estructura organizada como un ***Log*** (registro) una descripcion de la modificacion que se esta por hacer, procedimiento llamado ***Write Ahead***.
+<br>El *log* garantiza que, despues de un eventual crasheo en medio de la operacion de actualizacion del disco, su informacion va a permitir reintentar la escritura sabiendo exactamente que parte del disco debe repararse y como hacerlo (en vez de tener que escanear el disco entero). *Journaling* añade algo de *overhead* en cada actualizacion, pero reduce mucho el tiempo de recuperacion.
+
+### ext3
+
+Un *file system* con *journaling* usado por linux es ***ext3***. Este divide al disco en grupos de bloques, cada uno con un *inode bitmap*, *data bitmap*, *inodes* y *data blocks*. La estructura del *journaling* ocupa un pequeño espacio en la particion.
+
+![](../Teorico-practico/imagenes/EstructuraJournald.png)
+* Estructura del *journal* en el disco.
+
+#### *Data Journaling*
+
+Antes de realizar un *update* a disco, debe escribirse el *log*. Este consta de un bloque inicial **TxB** con informacion sobre el *update* (como la direccion de destino y una ***Transaction Identifier*** (**TID**); un ID de la operacion), una serie de bloques con el contenido de los bloques a escribir llamados ***Physical Logging*** (la informacion fisica de la *update* en el *journal*), y un bloque **TxE** que indican el final de la operacion y contiene una copia del TID.
+
+![](../Teorico-practico/imagenes/LogDeEscritura.png)
+* *Log* de escritura de *inode* l(v2), bitmap B(v2) y *datablock* (Db).
+
+Una vez dicha operacion esta en disco, se puede comenzar a ejecutar el pedido de `write` en si y actualizar las *data structures* en disco (escribir el contenido de los bloques de *physical logging*), proceso llamado ***Checkpointing***.
+
+Para evitar incosistencias provenientes de posibles crasheos durante las escrituras del *journal*, el *file system* primero hace el *transaccional write* de todos los bloques menos el TxE, y al finalizar escribe el TxE. La escritura de este ultimo logra ser atomica gracias a que el disco garantiza la atomicidad de `writes` de 512 bytes.
+
+#### *Recovery*
+
+Para recuperarse luego de un crasheo (en cualquier parte de la secuencia de escritura), el *file system* usa los contenidos del *journal*:
+* Si el *crash* es antes que la actualizacion pendiente se escriba en el *log* (*journal commit*), se saltea/ignora y el *write* no ocurre.
+* Si el *crash* ocurre despues del *commit* pero antes de que el *checkpoint* se complete, el *file system* Recupera la *update* escaneando el *log* y buscando las transacciones encomendadas en el disco en el booteo del sistema. Luego, dichas transacciones vuelven a ejecutarse (son repetidas en orden). Es por esto que esta forma de *logging* es llamada ***Redo Logging***. Un crasheo durante esta secuencia solo llevaria a repetir el proceso nuevamente.
+
+#### Agrupar Actualizaciones del *log*
+
+Debido a que hacer un *Commit* en cada *update* del disco puede añadir bastante trafico al mismo, algunos sistemas agrupan los *updates* en un buffer para evitar *writes* excesivos.
+
+#### Hacer el *log* Finito
+
+Para evitar que se llene la estructura finita del *log* y se inutilice el sistema (al no poder *commitear* mas *transactions* al disco), los *file systems* con *journaling* tratan el *log* como una estructura de datos ciruclar, reutilizando una y otra vez (por eso *journal* es llamado ***Circular Log***).
+<br>El sistema libera el espacio de la transaccion asignada del *log* una vez completado el *checkpoint*, marcando la misma como libre en el *superblock* del *journal*. En este ultimo se guardan los datos de las transacciones que todavia no llegaron al *checkpoint*.
+
+![](../Teorico-practico/imagenes/SuperblockYJournal.png)
+* *Superblock* y contenidos del *journal*.
+
+De esta forma, el protocolo de *journaling* consta de cuatro partes:
+1. ***Journal Write***: Escribir la transaccion en el *log* (TxB y contenidos a actulizar).
+2. ***Journal Commit***: Escribir el *transaction commit block* (TxE) en el *log*; lo que pone a la transaccion en estado de ***Committed*** (encomendada).
+3. ***Checkpoint***: Escribir los contenidos de la *update* (*metadata* y *data*) en su destino en disco.
+4. ***Free***: Marcar la transaccion como *free* en el *journal* al actualizar el *journal superblock*.
+
+Se espera a que cada paso finalice antes de comenzar con el siguiente.
+
+#### *Metadata Journaling*
+
+Notar que, si bien *data journaling* permite una recuperacion rapida ante crasheos, cada bloque se esta escribiendo en disco dos veces, lo que genera un gran *overhead* debido al alto costo de I/O.
+
+Una forma de aumentar la *performance* es usar modelos como ***Ordered Journaling*** (tambien llamado ***Metadata Journaling***), en los cuales la *data* no es escrita en el *journal*; esta es directamente escrita en disco y solo la metadata es copiada en el *journal*.
+
+El protocolo de *metadata journaling* consiste en:
+1. ***Data Write***: Escribir los datos en su direccion final.
+2. ***Journal Metadata Write***: Escribir la transaccion en el *log* (TxB y contenidos a actualizar).
+3. ***Journal Commit***: Escribir el *transaction commit block* (TxE) en el *log*.
+4. ***Checkpoint Metadata***: Escribir el contenido de la nueva metadata en su destino en disco.
+5. ***Free***: Marcar la transaccion como *free* en el *journal* al actualizar el *journal superblock*.
+
+Notar que con el paso 1 se evita que ante un crasheo un puntero quede apuntando a datos basura, ya que la informacion es escrita en disco antes de crear el puntero mismo.
+
+## Capitulo 43: *File System* Estructurados por *Logs*
 
