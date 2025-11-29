@@ -188,6 +188,55 @@ Los procesos pueden **Enviar y Recibir Señales** (***Signals***), que son mensa
 * `kill()`: Se usa para mandar ***signals*** a un proceso, incluyendo directivas para pausar, matar y otros imperativos utiles.
 * `signal()`: Se usa en un proceso para "agarrar" varias *signals*.
 
+### Ejemplos
+
+```c
+#include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <string.h>
+#include <fcntl.h>
+#include <sys/wait.h>
+
+int main(int argc, char *argv[]) {
+  int rc = fork();
+  if (rc < 0) {
+    // fork failed
+    fprintf(stderr, "fork failed\n");
+    exit(1);
+  } else if (rc == 0) {
+    // child: redirect standard output to a file
+    close(STDOUT_FILENO);
+    open("./p4.output", O_CREAT|O_WRONLY|O_TRUNC, S_IRWXU);
+
+    // now exec "wc"...
+    char *myargs[3];
+    myargs[0] = strdup("wc");
+    // program: wc (word count)
+    myargs[1] = strdup("p4.c"); // arg: file to count
+    myargs[2] = NULL;
+    // mark end of array
+    execvp(myargs[0], myargs); // runs word count
+  } else {
+    // parent goes down this path (main)
+    int rc_wait = wait(NULL);
+  }
+  return 0;
+}
+```
+
+Este programa muestra el uso de varias *system calls* de la API de procesos: `fork()`, `close()`, `open()`, `execvp()` y `wait()`.
+
+* Primero, el proceso padre llama a `fork()`, creando un proceso hijo.
+* En el hijo, se redirige la salida estándar (`STDOUT`) hacia un archivo: 
+  * Primero se cierra el file descriptor estándar con `close(STDOUT_FILENO)` y luego se abre el archivo `p4.output` con `open()`. 
+  * Como el descriptor 1 está libre, `open()` lo reutiliza, haciendo que cualquier salida del proceso vaya directamente a ese archivo.
+* Luego el hijo reemplaza su código usando `execvp()` para ejecutar el comando: `wc p4.c`.
+* La salida de este comando terminará en `p4.output` debido a la redirección previa.
+* Mientras tanto, el proceso padre continúa y llama a `wait()`, que bloquea su ejecución hasta que el hijo termine, evitando que se convierta en un proceso *zombie*. Una vez completado, el padre finaliza su ejecución.
+
+En conjunto, el programa demuestra cómo crear procesos, redirigir file descriptors, ejecutar un nuevo programa y sincronizar padre-hijo utilizando la API clásica de Unix.
+
 ## Capitulo 6: Ejecucion Directa Limidata (LDE)
 
 Para virtualizar la CPU el SO necesita compartir la CPU fisica entre varios trabajos simultaneos. La idea principal es ejecutar uno un poco y cambiar a otro rapidamente generando la ilusion de procesamiento simultaneo. Con ***Time Sharing*** (**Tiempo Compartido**) se alcanza la virtualizacion.
