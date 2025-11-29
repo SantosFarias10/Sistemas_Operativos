@@ -373,7 +373,7 @@ A pesar de que `B` y `C` llegaron poco despues que `A`, ellos son forzados a esp
 ### Politica: STCF (*Shortest Time-to-Completion First*) o PSJF (*Preemptive Shortest Job First*)
 
 Para esta politica suavizamos/olvidamos la suposicion (3) los Procesos no se ejecutan hasta terminarse. Tambien necesitamos algo de maquinaria en el planificador. Tomando el ejemplo, el planificador puede hacer algo cuando `B` y `C` llegan; puede reemplazar (*preempt*) y decidir ejecutar otro proceso, y quizas continuar ejecutando `A` despues.
-<br>Este planificador agrega reemplazo a SJF. Cuando entra un nuevo proceso al sistema, el planificador STCF determina a cual de los procesos que quedan le queda el menor tiempo de ejecucion, y planifica ese. Por l tanto, en nuestro ejemplo, STCF reemplazara `A` y ejecutara `B` y `C` hasta completarse; solo entonces podra planificarse el tiempo que le queda a `A`.
+<br>Este planificador agrega reemplazo a SJF. Cuando entra un nuevo proceso al sistema, el planificador STCF determina a cual de los procesos que quedan le queda el menor tiempo de ejecucion, y planifica ese. Por lo tanto, en nuestro ejemplo, STCF reemplazara `A` y ejecutara `B` y `C` hasta completarse; solo entonces podra planificarse el tiempo que le queda a `A`.
 
 ![](../Teorico-practico/imagenes/STCF.png)
 
@@ -394,7 +394,7 @@ Por ejemplo, si tenemos la planificacion del caso anterior (Con `A` llegando al 
 
 ### Planificacion: *Round Robin* (**RR**)
 
-Corre los procesos durante un periodo de tiempo fijo o hasta que acaben (este segmente, ***Time Slice***, es llamado ***Quantum***). Al ser cortado por un Q, el proceso va al final de una FIFO. Cambia de proceso cada cierto tiempo fijo de entre los trabajos que hay en una cola hasta que finalicen. este *time slice* debe ser multiplo del *timer interrupt* del sistema para que el SO pueda tomar control y hacer el *context switch* en ese momento.
+Corre los procesos durante un periodo de tiempo fijo o hasta que acaben (este segmento, ***Time Slice***, es llamado ***Quantum***). Al ser cortado por un Q, el proceso va al final de una FIFO. Cambia de proceso cada cierto tiempo fijo de entre los trabajos que hay en una cola hasta que finalicen. este *time slice* debe ser multiplo del *timer interrupt* del sistema para que el SO pueda tomar control y hacer el *context switch* en ese momento.
 <br>Ejemplo: Supongamos que hay tres procesos `A`, `B` y `C` llegan al mismo tiempo al sistema, y que cada uno quiere ejecutarse 5 segundos. Un planificador SJF ejecutara cada proceso hasta que se complete antes de ejecutar otro, como muestra la siguiente imagen:
 
 ![](../Teorico-practico/imagenes/SJFRR.png)
@@ -426,7 +426,7 @@ Ante dos procesos que arriban a la vez se debe establecer una politica que deter
 Obviamente todos los programas hacen I/O (suposicion (4)). Un planificador tiene una decision que tomar cuando un proceso inicia una peticion de I/O; porque el proceso que se esta ejecutando actualmente no puede usar la CPU durante la I/O; se bloquea esperando que se complete la I/O. Si la I/O es enviada al disco duro, el proceso sera bloqueado durante algunos milisegundos. Por lo tanto el planificador deberia planificar otro proceso en la CPU en ese tiempo.
 <br>El planificador tambien debera tomar una decision cuando una I/O se completa. Cuando esto ocurre, se genera una interrupcion, y el SO cambia el estado *blocked* del proceso que hizo la peticion a *ready*. Por supuesto, todavia debera decidir ejecutar el proceso o no.
 
-Ejemplo: Asumimos que hay dos proceso `A` y `B`, los cuales necesitan 50 milisegundos de tiempo de CPU. Sim embargo, hay una diferencia: `A` se ejecuta por 10 milisegundos y emite una peticion I/O (asumimos que cada I/O tarda 10 milisegundos), cuando `B` se ejecuta por 50 milisegundos y no hace ninguna I/O. El planificador ejecuta primero `A` y luego `B`.
+Ejemplo: Asumimos que hay dos proceso `A` y `B`, los cuales necesitan 50 milisegundos de tiempo de CPU. Sin embargo, hay una diferencia: `A` se ejecuta por 10 milisegundos y emite una peticion I/O (asumimos que cada I/O tarda 10 milisegundos), cuando `B` se ejecuta por 50 milisegundos y no hace ninguna I/O. El planificador ejecuta primero `A` y luego `B`.
 
 ![](../Teorico-practico/imagenes/I_O.png)
 
