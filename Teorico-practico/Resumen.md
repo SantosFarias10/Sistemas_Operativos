@@ -237,6 +237,7 @@ Este programa muestra el uso de varias *system calls* de la API de procesos: `fo
 
 En conjunto, el programa demuestra cómo crear procesos, redirigir file descriptors, ejecutar un nuevo programa y sincronizar padre-hijo utilizando la API clásica de Unix.
 
+---
 ## Capitulo 6: Ejecucion Directa Limidata (LDE)
 
 Para virtualizar la CPU el SO necesita compartir la CPU fisica entre varios trabajos simultaneos. La idea principal es ejecutar uno un poco y cambiar a otro rapidamente generando la ilusion de procesamiento simultaneo. Con ***Time Sharing*** (**Tiempo Compartido**) se alcanza la virtualizacion.
@@ -312,6 +313,7 @@ Para que no ocurran *interrupts* simulteneas, se suelen deshabilitar las interru
 ![Linea de tiempo](../Teorico-practico/imagenes/LineaDelTiempo2DeLaSegundaFaseDelProtocoloDeLDEAnteUnaInterrupciónPorTiempo.png)
 * Linea del tiempo de la segunda fase del protocolo de LDE ante una interrupcion por tiempo.
 
+---
 ## Capitulo 7: Planificacion de la CPU
 
 Las politicas de alto nivel (***Scheduling Policies***, o ***Diciplines***) son algoritmos utilizados por el *scheduler* del SO para decidir que procesos ejecutar y en que orden.
@@ -440,6 +442,7 @@ Asi es como un planificador incorpora I/O. Tratando cada uso de CPU como un proc
 
 Nuestra suposicion final: que el planificador conoce el tiempo de ejecucion de cada proceso. Es la peor suposicion que se pudo hacer, ya que en un SO de proposito general, el SO conoce muy poco sobre el tamaño de los procesos. Sin esto SJF y STCF no funcionan bien.
 
+---
 ## Capitulo 8: Cola MultiNivel con Retroalimentacion (MLFQ)
 
 Politica: **MLFQ** (***Multi-Level Feedback Queue***). Busca optimizar tanto el tiempo de entrega como el tiempo de respuesta, o sea, tener a la vez buena *perfomance* y ser interactivo, brindando una respuesta adaptativa.
