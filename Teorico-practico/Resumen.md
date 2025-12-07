@@ -2850,7 +2850,7 @@ En esta configuracion, la CPU mantiene conexiones directas y de alto rendimiento
 
 ### Dispositivos Canonicos
 
-Para entender los principios de interaccion con el hardware sin perdernos en detalles de cada dispositivo especifico (discos, tarjeta de red, etc), es util emplear un modelo abstracto o "canonico". Este modelo represneta las caracteristicas comunes a la mayoria de los dipositivos de I/O.
+Para entender los principios de interaccion con el hardware sin perdernos en detalles de cada dispositivo especifico (discos, tarjeta de red, etc), es util emplear un modelo abstracto o "canonico". Este modelo representa las caracteristicas comunes a la mayoria de los dipositivos de I/O.
 
 Un dispositivo canonico consta de dos componentes claves:
 * **La Interfaz de Hardware**: Es la cara que el dispositivo presenta al SO. Se compone de un conjunto de registros (estado, comando, datos) que el software del sistema puede leer y escribir para controlar el dispositivo. Es analoga a la API de un software.
@@ -2932,6 +2932,8 @@ Para que los dispositivos, cada uno con su interfaz especifica, puedan encajar e
 
 En la imagen se puede ver que un sistema de archivos (o una aplicacion por encima de este) le pasa inadvertida la especificacion de que clase de disco se esta usando; simplemente realiza un pedido de ***Block*** *read/write* al bloque generico, el cual redirecciona al ***Driver*** de dispositivo apropiado, el cual maneja los detalles de ejecutar el pedido especifico.
 <br>El diagrama tambien muestra la interfaz ***Raw*** a los dispositivos, la cual permite aplicaciones especiales (como un ***File-System Checker*** o una herramienta de **Desfragmentacion de Discos**).
+
+---
 
 ## Capitulo 37: Discos Duros
 
@@ -3058,7 +3060,11 @@ Otra tarea hecha por los *schedulers* del disco es el **I/O Merging**; ante un p
 
 El SO puede seguir una politica de enviar los pedidos de I/O al disco tan pronto como los recibe, lo cual es llamado ***Work-Conserving*** (el disco nunca para mientras haya pedidos), o esperar un poco por si llega un nuevo y mejor pedido de I/O, lo cual es denominado ***Non-Work-Conserving*** y mejora la eficiencia general.
 
+---
+
 ## Capitulo 38: RAID
+
+---
 
 ## Capitulo 39: Archivos y Directorios
 
@@ -3217,6 +3223,8 @@ Para ensamblar el arbol de directorios a partir de muchos sistemas de archivos s
 
 Una vez dicho *file system* es creado, debe ser accesible dentro del *file system tree* mas general, para lo cual se usa el programa `mount`. Esta toma el ***Mount Point*** (**Punto de Montaje**) y un directorio ya existente, y pega el *file system* a montar en el arbol de directorios en ese punto.
 
+---
+
 ## Capitulo 40: Implementacion del *File System*
 
 El *file system* es la estructura de datos en disco que mantiene los archivos de forma consistente. El kernel mantiene diferentes ***Virtual File System*** para todos los formatods que sabe leer; UFS, FAT, exFAT, NTFS, ISO, EXT, etc. y cada particion puede tener un formato diferente (cada uno de los cuales tiene sus *features* y limitaciones).
@@ -3337,6 +3345,8 @@ El alto costo de cada operacion de I/O afecta el desempeño del *file system*. P
 <br>Esta cache es mas util en la lectura que en la escritura, ya que la primera no necesita un manejo individual para pasar los datos de forma persistente, cosa que la estructura  si. Frente a esto se usa un ***Write Buffering***, el cual disminuye los I/Os al **Retrasar** los `writes` y permitir al *file system* juntar varias actualizaciones en un solo **Lote** (o directamente evitarlos si, por ejemplo, un proceso crea o escribe un archivo pero luego lo borra), y ademas incrementa el desempeño al almacenar en un *buffer* en memoria un numero de `writes`, permitiendo al *scheduler* del sistema encargarse de los siguientes I/Os.
 
 Como se vio en el capitulo anterior, existe un *trade-off* al usar *buffers* de escrituras, ya que un crasheo del sistema podria llevar a que se pierdan los datos que aun no ha sido escrito en el disco, lo que hace que suelan ser usados por aplicaciones criticas.
+
+---
 
 ## Capitulo 41: Localidad y *Fast File System*
 
