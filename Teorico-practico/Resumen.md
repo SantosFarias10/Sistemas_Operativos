@@ -46,7 +46,9 @@ Dios los bendiga 🚬
 - [Capitulo 41: Localidad y Fast File System](#capitulo-41-localidad-y-fast-file-system)
 - [Capitulo 42: Consistencia ante Errores: FSCK y Journaling](#capitulo-42-consistencia-ante-errores-fsck-y-journaling)
 - [Capitulo 43: File System Estructurados por Logs](#capitulo-43-file-system-estructurados-por-logs)
+
 ---
+
 # Virtualizacion de la CPU
 
 ## Capitulo 4: La Abstraccion de los Procesos
